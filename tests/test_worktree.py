@@ -32,7 +32,7 @@ def test_worktree_add_arguments(reset_directory,
     worktree_add_parser = parser_manager.find_parser('worktree-add')
 
     worktree_add_args = [
-        'name_or_path',
+        'path',
         'committish',
         '-b',
     ]
@@ -44,7 +44,7 @@ def test_worktree_add_arguments(reset_directory,
     worktree_rm_parser = parser_manager.find_parser('worktree-rm')
 
     worktree_rm_args = [
-        'name_or_path',
+        'name',
         '-f',
     ]
 
