@@ -321,6 +321,7 @@ class WorktreePlugin(Plugin):
             parent = path.parent
             if parent == path:
                 break
+            path = parent
 
     def add_arguments(self, git, gitproject, project, parser_manager):
         """Add arguments for 'git-project worktree.'"""
