@@ -293,7 +293,35 @@ class Worktree(ScopedConfigObject):
         super().rm()
 
 class WorktreePlugin(Plugin):
-    """A pliugin to provide the git-project worktree command."""
+    """A plugin to provide the git-project worktree command."""
+
+    def initialize(self, git, gitproject, project, plugin_manager):
+        """Instantiate a Worktree if we are in a worktree path, providing scoping for
+        Project config variables.
+
+        git: A Git object to examine the repository.
+
+        gitproject: A GitProject object to explore and manipulate the active
+                    project.
+
+        project: The active Project.
+
+        plugin_manager: The active  PluginManager.
+
+        """
+        path = Path.cwd()
+        path.resolve()
+        while True:
+            if ConfigObject.exists(git,
+                                   project.section,
+                                   Worktree.Path.subsection(),
+                                   str(path)):
+                worktree = Worktree.get_by_path(git, project, str(path))
+                break
+            parent = path.parent
+            if parent == path:
+                break
+
     def add_arguments(self, git, gitproject, project, parser_manager):
         """Add arguments for 'git-project worktree.'"""
 
