@@ -70,28 +70,11 @@ def get_name_path_and_refname(git, gp, clargs):
     neither <name-or-path> nor <committish> is provided, raise an exception.
 
     """
-    if clargs.name_or_path and hasattr(clargs, 'committish') and clargs.committish:
-        name = str(Path(clargs.name_or_path).name)
-        path = normalize_path(git, clargs.name_or_path)
-        refname = git.branch_name_to_refname(clargs.committish)
-    elif clargs.name_or_path:
-        refname = git.branch_name_to_refname(clargs.name_or_path)
-        if git.committish_exists(refname):
-            name = git.refname_to_branch_name(refname)
-            path = normalize_path(git, name)
-        else:
-            name = str(Path(clargs.name_or_path).name)
-            path = normalize_path(git, clargs.name_or_path)
-    elif hasattr(clargs, 'committtish') and clargs.committish:
-        refname = git.branch_name_to_refname(clargs.committish)
-        if git.committish_exists(refname):
-            name = git.refname_to_branch_name(refname)
-            path = normalize_path(git, name)
-        else:
-            name = str(Path(clargs.committish).name)
-            path = normalize_path(git, clargs.committish)
-    else:
-        raise GitProjectException('Neither path nor committish provided for worktree add')
+    name = str(Path(clargs.path).name)
+    path = normalize_path(git, clargs.path)
+    refname = git.committish_to_refname('HEAD')
+    if hasattr(clargs, 'committish') and clargs.committish:
+        refname = git.committish_name_to_refname(clargs.committish)
 
     return name, path, refname
 
@@ -100,26 +83,34 @@ def command_worktree_add(git, gitproject, project, clargs):
     """Implement git-project worktree add."""
     name, path, refname = get_name_path_and_refname(git, gitproject, clargs)
 
-    branch_point = refname if git.committish_exists(refname) else  'HEAD'
+    branch = git.refname_to_branch_name(refname)
+    branch_point = refname
+
     if not git.committish_exists(branch_point):
         raise GitProjectException(f'Branch point {branch_point} does not exist for worktree add')
 
-    branch = name
+    # Either use the branch the user gave us or create a branch (if needed)
+    # named after the given name.
     if clargs.branch:
+        branch = clargs.branch
         git.create_branch(branch, branch_point)
+    elif name != branch:
+        branch = name
+        if not git.committish_exists(name):
+            git.create_branch(branch, branch_point)
 
     worktree = Worktree.get(git,
                             project,
                             name,
                             path=path,
-                            committish=branch_point)
+                            committish=branch)
     worktree.add()
 
     return worktree
 
 def command_worktree_rm(git, gitproject, project, clargs):
     """Implement git-project worktree rm."""
-    name, path, committish = get_name_path_and_refname(git, gitproject, clargs)
+    name = clargs.name
     worktree = Worktree.get(git, project, name)
 
     if not project.branch_is_merged(worktree.committish) and not clargs.force:
@@ -331,16 +322,16 @@ class WorktreePlugin(Plugin):
 
         worktree_add_parser.set_defaults(func=command_worktree_add)
 
-        worktree_add_parser.add_argument('name_or_path',
+        worktree_add_parser.add_argument('path',
                                          nargs='?',
-                                         help='Name or path for worktree checkout')
+                                         help='Path for worktree checkout')
         worktree_add_parser.add_argument('committish',
                                          nargs='?',
                                          help='Branch point for worktree')
         worktree_add_parser.add_argument('-b',
                                          '--branch',
-                                         action='store_true',
-                                         help='Create a branch for the worktree')
+                                         metavar='BRANCH',
+                                         help='Create BRANCH for the worktree')
 
         # worktree rm
         worktree_rm_parser = parser_manager.add_parser(worktree_subparser,
@@ -350,7 +341,7 @@ class WorktreePlugin(Plugin):
 
         worktree_rm_parser.set_defaults(func=command_worktree_rm)
 
-        worktree_rm_parser.add_argument('name_or_path', nargs='?',
+        worktree_rm_parser.add_argument('name',
                                         help='Worktree to remove')
         worktree_rm_parser.add_argument('-f', '--force', action='store_true',
                                         help='Remove even if branch is not merged')
