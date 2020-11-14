@@ -29,6 +29,8 @@ git-project branch prune [--no-ask] [<pattern>]
 from git_project import Git, RunnableConfigObject, ConfigObjectItem, Plugin
 from git_project import add_top_level_command, Project, GitProjectException
 
+import getpass
+
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via input() and return their answer.
 
