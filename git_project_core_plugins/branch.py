@@ -90,7 +90,7 @@ def command_branch_status(git, gitproject, project, clargs):
                  branch_width=branch_width, status_width=status_width))
     print('-' * separator_width)
 
-    for branch in git.iterrefnames(ref):
+    for branch in git.iterrefnames([ref]):
         merge_status = 'no'
         if target:
             merge_status = 'yes' if git.branch_is_merged(branch, target) else 'no'
