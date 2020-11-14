@@ -91,6 +91,7 @@ refs/heads/merged_remote                     yes     yes
 refs/heads/notpushed                         no      no      
 refs/heads/pushed                            no      yes     
 refs/heads/unmerged                          no      no      
+refs/remotes/origin/HEAD                     yes     yes     
 refs/remotes/origin/master                   yes     yes     
 refs/remotes/origin/notpushed                yes     yes     
 refs/remotes/origin/pushed                   no      no      
