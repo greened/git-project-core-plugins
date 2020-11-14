@@ -59,7 +59,8 @@ def test_branch_status(reset_directory,
                        gitproject,
                        project,
                        parser_manager,
-                       capsys):
+                       capsys,
+                       script_runner):
     plugin = BranchPlugin()
 
     plugin.add_arguments(git, gitproject, project, parser_manager)
@@ -91,14 +92,16 @@ refs/heads/merged_remote                     yes     yes
 refs/heads/notpushed                         no      no      
 refs/heads/pushed                            no      yes     
 refs/heads/unmerged                          no      no      
-refs/remotes/origin/HEAD                     yes     yes     
-refs/remotes/origin/master                   yes     yes     
-refs/remotes/origin/notpushed                yes     yes     
-refs/remotes/origin/pushed                   no      no      
 -----------------------------------------------------------
 """
     assert captured.out == expected
     assert captured.err == ''
+
+    ret = script_runner.run('git-project', 'branch', 'status', '--all')
+
+    assert ret.success
+    assert ret.stdout == expected
+    assert ret.stderr == ''
 
 def test_branch_prune(reset_directory,
                       git,
@@ -128,8 +131,6 @@ def test_branch_prune(reset_directory,
 
     captured = capsys.readouterr()
 
-    print(captured)
-
     expected = """---------------------------------------------------------------------------
 branch                                       local status   remote status  
 ---------------------------------------------------------------------------
@@ -137,6 +138,30 @@ refs/heads/merged_remote                     merged
 """
     assert captured.out == expected
     assert captured.err == ''
+
+    assert not git.committish_exists('merged_remote')
+    assert not git.committish_exists('refs/heads/merged_remote')
+    assert not git.committish_exists('refs/remotes/origin/merged_remote')
+
+def test_branch_prune_script(reset_directory,
+                             git,
+                             script_runner):
+    expected = """---------------------------------------------------------------------------
+branch                                       local status   remote status  
+---------------------------------------------------------------------------
+refs/heads/merged_remote                     merged         
+"""
+
+    ret = script_runner.run('git-project',
+                            'branch',
+                            'prune',
+                            'merged_remote',
+                            '--all',
+                            '--no-ask')
+
+    assert ret.success
+    assert ret.stdout == expected
+    assert ret.stderr == ''
 
     assert not git.committish_exists('merged_remote')
     assert not git.committish_exists('refs/heads/merged_remote')
