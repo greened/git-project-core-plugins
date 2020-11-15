@@ -29,7 +29,7 @@ setup(name='git_project_core_plugins',
       classifiers=[
           'Development Status :: 3 - Alpha',
           'Environment :: Console',
-          'Intended Audience :: Developers'
+          'Intended Audience :: Developers',
           'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
           'Programming Language :: Python :: 3.6',
           'Topic :: Software Development :: Version Control :: Git',
