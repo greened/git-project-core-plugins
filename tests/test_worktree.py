@@ -20,6 +20,9 @@ import git_project
 from git_project_core_plugins import Worktree, WorktreePlugin
 import common
 
+import os
+from pathlib import Path
+
 def test_worktree_add_arguments(reset_directory,
                                 git,
                                 gitproject,
@@ -143,3 +146,44 @@ def test_worktree_scope(reset_directory,
     assert project.path == '/path/to/test'
     assert project.committish == 'master'
     assert project.builddir == '/path/to/test'
+
+def test_worktree_clone(git_project_runner,
+                        remote_repository):
+    repo_path = Path('.git')
+
+    git_project_runner.run('.*',
+                           '',
+                           'clone',
+                           '--worktree',
+                           remote_repository.path)
+
+    assert os.path.exists(repo_path)
+    assert os.path.exists('master')
+
+def test_worktree_clone_bare(git_project_runner,
+                             remote_repository):
+    git_project_runner.run('.*',
+                           '',
+                           'clone',
+                           '--bare',
+                           '--worktree',
+                           remote_repository.path)
+
+    repo_path = Path('.git')
+
+    assert os.path.exists(repo_path)
+    assert os.path.exists('master')
+
+def test_worktree_clone_path(git_project_runner,
+                             remote_repository):
+    repo_path = Path.cwd() / 'foo' / 'bar'
+
+    git_project_runner.run('.*',
+                           '',
+                           'clone',
+                           '--worktree',
+                           remote_repository.path,
+                           str(repo_path))
+
+    assert os.path.exists(str(repo_path / '.git'))
+    assert os.path.exists(repo_path / 'master')

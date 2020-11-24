@@ -26,7 +26,7 @@ git-project worktree rm <name-or-path>
 
 """
 
-from git_project import ConfigObject, ConfigObjectItem, Plugin, Project
+from git_project import ConfigObject, ConfigObjectItem, Git, Plugin, Project
 from git_project import gen_config_epilog, ScopedConfigObject
 from git_project import add_top_level_command, GitProjectException
 
@@ -34,6 +34,7 @@ import argparse
 import os
 from pathlib import Path
 import shutil
+import urllib
 
 # Take a path and normalize it to the current working directory.  If the current
 # directory is a bare repository, place this path inside it.  If not, place this
@@ -55,7 +56,7 @@ def normalize_path(git, path):
         if git.is_bare_repository():
             path = Path.cwd() / path
         else:
-            path = Path(git.get_repository_root()).parent / path
+            path = Path(git.get_working_copy_root()) / path
 
     path = path.resolve()
 
@@ -74,7 +75,7 @@ def get_name_path_and_refname(git, gp, clargs):
     path = normalize_path(git, clargs.path)
     refname = git.committish_to_refname('HEAD')
     if hasattr(clargs, 'committish') and clargs.committish:
-        refname = git.committish_name_to_refname(clargs.committish)
+        refname = git.committish_to_refname(clargs.committish)
 
     return name, path, refname
 
@@ -91,7 +92,7 @@ def command_worktree_add(git, gitproject, project, clargs):
 
     # Either use the branch the user gave us or create a branch (if needed)
     # named after the given name.
-    if clargs.branch:
+    if hasattr(clargs, 'branch') and clargs.branch:
         branch = clargs.branch
         git.create_branch(branch, branch_point)
     elif name != branch:
@@ -375,38 +376,48 @@ class WorktreePlugin(Plugin):
         worktree_rm_parser.add_argument('-f', '--force', action='store_true',
                                         help='Remove even if branch is not merged')
 
-        # add a clone option to defer creating a master worktree when doing a
-        # bare clone.
+        # add a clone option to create a worktree layout.
         clone_parser = parser_manager.find_parser('clone')
         if clone_parser:
-            clone_parser.add_argument('--no-master-worktree', action='store_true',
-                                      help='Do not create a master worktree (only created with --bare)')
+            clone_parser.add_argument('--worktree', action='store_true',
+                                      help='Create a layout convenient for worktree use')
 
     def modify_arguments(self, git, gitproject, project, parser_manager, plugin_manager):
         """Modify arguments for 'git-project worktree.'"""
 
-        # If a bare clone is done, set up a master worktree unless told not to.
+        # If a clone is done, set up a master worktree unless told not to.
         clone_parser = parser_manager.find_parser('clone')
         if clone_parser:
             command_clone = clone_parser.get_default('func')
+
             def worktree_command_clone(p_git, p_gitproject, p_project, clargs):
-                path = command_clone(p_git, p_gitproject, p_project, clargs)
-                if clargs.bare and not clargs.no_master_worktree:
-                    barepath = (Path(path).parent / '.bare.git').resolve()
-                    dotgitpath = (barepath.parent / '.git').resolve()
-                    os.rename(path, barepath)
-                    os.symlink(barepath, dotgitpath)
-                    path = str(dotgitpath)
+                if clargs.worktree:
+                    path = Path.cwd()
+                    if hasattr(clargs, 'path') and clargs.path:
+                        path = Path(clargs.path)
+
+                    path = path / '.git'
+
+                    setattr(clargs, 'path', str(path))
+                    setattr(clargs, 'bare', True)
+
+                    # Bare clone to the hidden .git directory.
+                    path = command_clone(p_git, p_gitproject, p_project, clargs)
 
                     # Make HEAD point to something other than master so we can
                     # worktree master.
-                    git.create_branch('git-project-init', 'HEAD')
-                    git.update_symbolic_ref('HEAD', 'refs/heads/git-project-init')
+                    p_git.create_branch('git-project-init', 'HEAD')
+                    p_git.update_symbolic_ref('HEAD', 'refs/heads/git-project-init')
 
                     # Set up a master worktree.
+                    master_path = Path(path).parent / 'master'
                     setattr(clargs, 'committish', 'master')
-                    setattr(clargs, 'path', 'master')
-                    command_worktree_add(clargs)
+                    setattr(clargs, 'path', str(master_path))
+
+                    command_worktree_add(p_git, p_gitproject, p_project, clargs)
+                else:
+                    path = command_clone(p_git, p_gitproject, p_project, clargs)
+
                 return path
 
             clone_parser.set_defaults(func=worktree_command_clone)

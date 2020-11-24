@@ -16,7 +16,6 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-from git_project.test_support import PluginMock
 from git_project_core_plugins import Worktree
 
 from io import StringIO
