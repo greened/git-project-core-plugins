@@ -29,6 +29,7 @@ from git_project.test_support import reset_directory
 from git_project.test_support import parser_manager
 from git_project.test_support import plugin_manager
 from git_project.test_support import git
+from git_project.test_support import git_project_runner
 from git_project.test_support import gitproject
 from git_project.test_support import project
 
