@@ -35,6 +35,7 @@ def test_add_arguments(reset_directory,
 
     clone_args = [
         'url',
+        'path',
         '--bare',
     ]
 
@@ -89,3 +90,31 @@ def test_clone_bare(reset_directory,
 
     assert os.path.exists(gitdir)
     assert not os.path.exists(Path(gitdir) / '.git')
+
+def test_clone_path(reset_directory,
+                    git,
+                    gitproject,
+                    project,
+                    parser_manager,
+                    remote_repository):
+    plugin = ClonePlugin()
+
+    plugin.add_arguments(git, gitproject, project, parser_manager)
+
+    clone_parser = parser_manager.find_parser('clone')
+
+    command_clone = clone_parser.get_default('func')
+
+    clone_path = Path.cwd() / 'foo' / 'bar'/ 'test-clone'
+
+    clargs = {
+        'url': remote_repository.path,
+        'path': str(clone_path),
+        'bare': False
+    }
+
+    gitdir = command_clone(git, gitproject, project, common.AttrDict(clargs))
+
+    assert os.path.exists(gitdir)
+    assert os.path.exists(Path(gitdir) / '.git')
+    assert gitdir == str(clone_path)

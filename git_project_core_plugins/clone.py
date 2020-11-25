@@ -21,7 +21,7 @@ repository and optionally initializes a master worktree environment.
 
 Summary:
 
-git-project clone <url> [--bare] [--no-master-worktree]
+git-project clone <url> [path] [--bare] [--no-master-worktree]
 
 """
 
@@ -89,7 +89,10 @@ class CloneCallbacks(pygit2.RemoteCallbacks):
 def command_clone(git, gitproject, project, clargs):
     """Implement git-project clone"""
     callbacks = CloneCallbacks()
-    gitdir = git.clone(clargs.url, bare=clargs.bare, callbacks=callbacks)
+    gitdir = git.clone(clargs.url,
+                       path=clargs.path if hasattr(clargs, 'path') else None,
+                       bare=clargs.bare,
+                       callbacks=callbacks)
 
     # Now that we have a repository, add sensible project defaults.  We know
     # there is no existing project in the config file since we just cloned.
@@ -113,5 +116,10 @@ class ClonePlugin(Plugin):
         clone_parser.add_argument('url',
                                   help='URL to clone')
 
-        clone_parser.add_argument('--bare', action='store_true',
-                                  help='Clone a bare repositrory')
+        clone_parser.add_argument('path',
+                                  nargs='?',
+                                  help='Local repository location')
+
+        clone_parser.add_argument('--bare',
+                                  action='store_true',
+                                  help='Clone a bare repository')
