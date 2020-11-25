@@ -398,16 +398,31 @@ class WorktreePlugin(Plugin):
 
                     path = path / '.git'
 
+                    bare_specified = clargs.bare
+
                     setattr(clargs, 'path', str(path))
                     setattr(clargs, 'bare', True)
 
                     # Bare clone to the hidden .git directory.
                     path = command_clone(p_git, p_gitproject, p_project, clargs)
 
-                    # Make HEAD point to something other than master so we can
-                    # worktree master.
-                    p_git.create_branch('git-project-init', 'HEAD')
-                    p_git.update_symbolic_ref('HEAD', 'refs/heads/git-project-init')
+                    # Detach HEAD so we can worktree master.
+                    p_git.detach_head()
+
+                    # If the user did not ask for a bare repo, rewrite refspecs,
+                    # fetch remote refs and rewrite existing refs (just master)
+                    # to track the remote ref.  Delete other "local" branches.
+                    if not bare_specified:
+                        p_git.set_remote_fetch_refspecs('origin',
+                                                        ['+refs/heads/*:refs/remotes/origin/*'])
+                        p_git.fetch_remote('origin')
+
+                        for refname in p_git.iterrefnames(['refs/heads']):
+                            if refname == 'refs/heads/master':
+                                remote_refname = p_git.get_remote_fetch_refname(refname, 'origin')
+                                p_git.set_branch_upstream(refname, remote_refname)
+                            else:
+                                p_git.delete_branch(refname)
 
                     # Set up a master worktree.
                     master_path = Path(path).parent / 'master'
