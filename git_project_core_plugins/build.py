@@ -26,7 +26,7 @@ git-project build <flavor>
 """
 
 from git_project import RunnableConfigObject, ConfigObjectItem, Plugin, Project
-from git_project import get_or_add_top_level_command, gen_runnable_epilog
+from git_project import get_or_add_top_level_command
 
 import argparse
 
@@ -55,11 +55,6 @@ class Build(RunnableConfigObject):
 
     """
 
-    _configitems = [ConfigObjectItem('command',
-                                     None,
-                                     'Command to build project'),
-                    ConfigObjectItem('description', None, 'Build flavor help')]
-
     @staticmethod
     def subsection():
         """ConfigObject protocol subsection."""
@@ -70,7 +65,6 @@ class Build(RunnableConfigObject):
                  project_section,
                  subsection,
                  ident,
-                 configitems,
                  **kwargs):
         """Build construction.
 
@@ -84,9 +78,6 @@ class Build(RunnableConfigObject):
 
         ident: The name of this specific Build.
 
-        configitems: A list of ConfigObjectItem describing members of the config
-                     section.
-
         **kwargs: Keyword arguments of property values to set upon construction.
 
         """
@@ -94,7 +85,6 @@ class Build(RunnableConfigObject):
                          project_section,
                          subsection,
                          ident,
-                         configitems,
                          **kwargs)
 
     @classmethod
@@ -113,10 +103,9 @@ class Build(RunnableConfigObject):
 
         """
         return super().get(git,
-                           project.section,
+                           project.get_section(),
                            cls.subsection(),
                            flavor,
-                           cls.configitems(),
                            **kwargs)
 
     @staticmethod
@@ -139,7 +128,7 @@ class BuildPlugin(Plugin):
             add_parser = get_or_add_top_level_command(parser_manager,
                                                       'add',
                                                       'add',
-                                                      help=f'Add config sections to {project.section}')
+                                                      help=f'Add config sections to {project.get_section()}')
 
             add_subparser = parser_manager.get_or_add_subparser(add_parser,
                                                                 'add-command',
@@ -148,7 +137,7 @@ class BuildPlugin(Plugin):
             add_build_parser = parser_manager.add_parser(add_subparser,
                                                          Build.get_managing_command(),
                                                          'add-' + Build.get_managing_command(),
-                                                         help=f'Add a build to {project.section}')
+                                                         help=f'Add a build to {project.get_section()}')
 
             add_build_parser.set_defaults(func=command_add_build)
 
@@ -166,7 +155,7 @@ class BuildPlugin(Plugin):
             rm_parser = get_or_add_top_level_command(parser_manager,
                                                      'rm',
                                                      'rm',
-                                                     help=f'Remove config sections from {project.section}')
+                                                     help=f'Remove config sections from {project.get_section()}')
 
             rm_subparser = parser_manager.get_or_add_subparser(rm_parser,
                                                                'rm-command',
@@ -175,7 +164,7 @@ class BuildPlugin(Plugin):
             rm_build_parser = parser_manager.add_parser(rm_subparser,
                                                         Build.get_managing_command(),
                                                         'rm-' + Build.get_managing_command(),
-                                                        help=f'Remove a build from {project.section}')
+                                                        help=f'Remove a build from {project.get_section()}')
 
             rm_build_parser.set_defaults(func=command_rm_build)
 
@@ -191,23 +180,13 @@ class BuildPlugin(Plugin):
                                                      Build.get_managing_command(),
                                                      help='Build project',
                                                      formatter_class=
-                                                     argparse.RawDescriptionHelpFormatter,
-                                                     epilog=
-                                                     gen_runnable_epilog(Build,
-                                                                         project,
-                                                                         Build.subsection(),
-                                                                         Build.configitems(),
-                                                                         secparam='<flavor>'))
+                                                     argparse.RawDescriptionHelpFormatter)
 
             build_parser.set_defaults(func=command_build)
 
             if builds:
                 build_parser.add_argument('flavor', choices=builds,
                                           help='Build type')
-
-    def add_class_hooks(self, git, plugin_manager):
-        """Add hooks for build."""
-        Project.add_config_item('build', None, 'Builds for the project')
 
     def iterclasses(self):
         """Iterate over public classes for git-project build."""

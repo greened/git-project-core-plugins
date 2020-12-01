@@ -33,8 +33,8 @@ system proper.
 
 """
 
-from git_project import RunnableConfigObject, ConfigObjectItem, Plugin, Project
-from git_project import get_or_add_top_level_command, gen_runnable_epilog
+from git_project import RunnableConfigObject, Plugin, Project
+from git_project import get_or_add_top_level_command
 
 import argparse
 
@@ -53,19 +53,11 @@ def command_add_install(git, gitproject, project, clargs):
 class Install(RunnableConfigObject):
     """A RunnableConfigObject to manage install flavors."""
 
-    _configitems = [ConfigObjectItem('command',
-                                     None,
-                                     'Command to install project'),
-                    ConfigObjectItem('description',
-                                     None,
-                                     'Install flavor help')]
-
     def __init__(self,
                  git,
                  project_section,
                  subsection,
                  ident,
-                 configitems,
                  **kwargs):
         """Install construction.
 
@@ -79,9 +71,6 @@ class Install(RunnableConfigObject):
 
         ident: The name of this specific Install.
 
-        configitems: A list of ConfigObjectItem describing members of the config
-                     section.
-
         **kwargs: Keyword arguments of property values to set upon construction.
 
         """
@@ -89,7 +78,6 @@ class Install(RunnableConfigObject):
                          project_section,
                          subsection,
                          ident,
-                         configitems,
                          **kwargs)
 
     @staticmethod
@@ -111,10 +99,9 @@ class Install(RunnableConfigObject):
 
         """
         return super().get(git,
-                           project.section,
+                           project.get_section(),
                            cls.subsection(),
-                           flavor,
-                           cls.configitems())
+                           flavor)
 
     @staticmethod
     def substitutions():
@@ -138,7 +125,7 @@ class InstallPlugin(Plugin):
             add_parser = get_or_add_top_level_command(parser_manager,
                                                       'add',
                                                       'add',
-                                                      help=f'Add config sections to {project.section}')
+                                                      help=f'Add config sections to {project.get_section()}')
 
             add_subparser = parser_manager.get_or_add_subparser(add_parser,
                                                                 'add-command',
@@ -147,7 +134,7 @@ class InstallPlugin(Plugin):
             add_install_parser = parser_manager.add_parser(add_subparser,
                                                            Install.get_managing_command(),
                                                            'add-' + Install.get_managing_command(),
-                                                           help=f'Add a install to {project.section}')
+                                                           help=f'Add a install to {project.get_section()}')
 
             add_install_parser.set_defaults(func=command_add_install)
 
@@ -168,25 +155,13 @@ class InstallPlugin(Plugin):
                                                        Install.get_managing_command(),
                                                        help='Install project',
                                                        formatter_class=
-                                                       argparse.RawDescriptionHelpFormatter,
-                                                       epilog=
-                                                       gen_runnable_epilog(Install,
-                                                                           project,
-                                                                           Install.subsection(),
-                                                                           Install.configitems(),
-                                                                           secparam='<flavor>'))
+                                                       argparse.RawDescriptionHelpFormatter)
 
             install_parser.set_defaults(func=command_install)
 
             if installs:
                 install_parser.add_argument('flavor', choices=installs,
                                             help='Install type')
-
-    def add_class_hooks(self, git, plugin_manager):
-        """Add hooks for install."""
-        Project.add_config_item('install',
-                                None,
-                                'Installs for the project')
 
     def iterclasses(self):
         """Iterate over public classes for git-project install."""

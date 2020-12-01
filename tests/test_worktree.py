@@ -78,7 +78,7 @@ def test_worktree_get(reset_directory,
                       gitproject,
                       project,
                       parser_manager):
-    project.set_item('builddir', '/path/to/build')
+    setattr(project, 'builddir', '/path/to/build')
 
     worktree = Worktree.get(git,
                             project,
@@ -125,7 +125,7 @@ def test_worktree_scope(reset_directory,
                         gitproject,
                         project,
                         parser_manager):
-    project.set_item('builddir', '/path/to/build')
+    setattr(project, 'builddir', '/path/to/build')
 
     worktree = Worktree.get(git,
                             project,

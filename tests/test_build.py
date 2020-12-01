@@ -61,21 +61,3 @@ def test_build_get_with_repo(reset_directory, build_git, project):
 
 def test_build_get_managing_command():
     assert Build.get_managing_command() == 'build'
-
-def test_build_add_hooks(reset_directory,
-                         git,
-                         gitproject,
-                         project,
-                         worktree_plugin_manager):
-    plugin = BuildPlugin()
-
-    plugin.add_class_hooks(git, worktree_plugin_manager)
-
-    found_build = False
-    found_builddir= False
-    found_buildwidth = False
-    for item in git_project.Project.configitems():
-        if item.key == 'build':
-            found_build = True
-
-    assert found_build
