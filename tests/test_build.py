@@ -61,3 +61,12 @@ def test_build_get_with_repo(reset_directory, build_git, project):
 
 def test_build_get_managing_command():
     assert Build.get_managing_command() == 'build'
+
+def test_build_get_kwargs(reset_directory, build_git, project):
+    build = Build.get(build_git,
+                      project,
+                      'test',
+                      command='test command')
+
+    assert build.command == 'test command'
+    assert build.description == 'Run tests'

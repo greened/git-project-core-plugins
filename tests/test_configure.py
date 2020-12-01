@@ -83,3 +83,12 @@ def test_configure_get_with_repo(reset_directory, configure_git, project):
 
 def test_configure_get_managing_command():
     assert Configure.get_managing_command() == 'configure'
+
+def test_configure_get_kwargs(reset_directory, configure_git, project):
+    configure = Configure.get(configure_git,
+                              project,
+                              'debug',
+                              command='test command')
+
+    assert configure.command == 'test command'
+    assert configure.description == 'Configure debug build'
