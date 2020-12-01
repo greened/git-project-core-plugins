@@ -42,29 +42,23 @@ def command_config(git, gitproject, project, clargs):
     if hasattr(clargs, 'ident'):
         ident = clargs.ident
 
-    if not exister(git, project.section, subsection, ident):
+    if not exister(git, project.get_section(), subsection, ident):
         if ident:
             raise GitProjectException(f'{classname} \'{ident}\' does not exist')
         else:
             raise GitProjectException(f'No {classname} configured')
 
-    configitem = getter(git, project, ident) if ident else getter(git, project.section)
+    configitem = getter(git, project, ident) if ident else getter(git, project.get_section())
 
     if clargs.value:
         if clargs.unset:
             configitem.rm_item(clargs.name, clargs.value)
         else:
-            # Verify this is a valid config item.
-            for item in configitem.configitems():
-                if item.key == clargs.name:
-                    break
-            else:
-                raise GitProjectException(f'\'{clargs.name}\' is not a valid key for {classname}')
-            configitem.set_item(clargs.name, clargs.value)
+            setattr(configitem, clargs.name, clargs.value)
     elif clargs.unset:
-        configitem.rm_items(clargs.name)
+        delattr(configitem, clargs.name)
     else:
-        value = configitem.get_item(clargs.name)
+        value = getattr(configitem, clargs.name)
         print(value)
 
 class ConfigPlugin(Plugin):

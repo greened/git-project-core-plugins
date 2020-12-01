@@ -62,19 +62,3 @@ def test_install_get_with_repo(reset_directory, install_git, project):
 
 def test_install_get_managing_command():
     assert Install.get_managing_command() == 'install'
-
-def test_install_add_hooks(reset_directory,
-                           git,
-                           gitproject,
-                           project,
-                           worktree_plugin_manager):
-    plugin = InstallPlugin()
-
-    plugin.add_class_hooks(git, worktree_plugin_manager)
-
-    found_install = False
-    for item in git_project.Project.configitems():
-        if item.key == 'install':
-            found_install = True
-
-    assert found_install

@@ -26,8 +26,8 @@ git-project worktree rm <name-or-path>
 
 """
 
-from git_project import ConfigObject, ConfigObjectItem, Git, Plugin, Project
-from git_project import gen_config_epilog, ScopedConfigObject
+from git_project import ConfigObject, Git, Plugin, Project
+from git_project import ScopedConfigObject
 from git_project import add_top_level_command, GitProjectException
 
 import argparse
@@ -128,14 +128,11 @@ class Worktree(ScopedConfigObject):
 
         """
 
-        _configitems = [ConfigObjectItem('worktree', None, 'Worktree name')]
-
         def __init__(self,
                      git,
                      project_section,
                      subsection,
                      ident,
-                     configitems,
                      **kwargs):
             """Path construction.
 
@@ -149,9 +146,6 @@ class Worktree(ScopedConfigObject):
 
             ident: The name of this specific Build.
 
-            configitems: A list of ConfigObjectItem describing members of the config
-                         section.
-
             **kwargs: Keyword arguments of property values to set upon construction.
 
             """
@@ -159,7 +153,6 @@ class Worktree(ScopedConfigObject):
                              project_section,
                              subsection,
                              ident,
-                             configitems,
                              **kwargs)
 
         @classmethod
@@ -177,9 +170,6 @@ class Worktree(ScopedConfigObject):
 
             path: The path to reference this Path..
 
-            configitems: A list of ConfigObjectItem describing members of the config
-                         section.
-
             **kwargs: Keyword arguments of property values to set upon
                       construction.
 
@@ -188,18 +178,13 @@ class Worktree(ScopedConfigObject):
                                project_section,
                                cls.subsection(),
                                path,
-                               cls.configitems(),
                                **kwargs)
-
-    _configitems = [ConfigObjectItem('path', None, 'Worktree path'),
-                    ConfigObjectItem('committish', None, 'Worktree branch')]
 
     def __init__(self,
                  git,
                  project_section,
                  subsection,
                  ident,
-                 configitems,
                  **kwargs):
         """Worktree construction.
 
@@ -213,9 +198,6 @@ class Worktree(ScopedConfigObject):
 
         ident: The name of this specific Build.
 
-        configitems: A list of ConfigObjectItem describing members of the config
-                     section.
-
         **kwargs: Keyword arguments of property values to set upon construction.
 
         """
@@ -223,7 +205,6 @@ class Worktree(ScopedConfigObject):
                          project_section,
                          subsection,
                          ident,
-                         configitems,
                          **kwargs)
         self._pathsection = self.Path.get(git,
                                           project_section,
@@ -249,10 +230,9 @@ class Worktree(ScopedConfigObject):
 
         """
         worktree = super().get(git,
-                               project.section,
+                               project.get_section(),
                                cls.subsection(),
                                name,
-                               cls.configitems(),
                                **kwargs)
         project.push_scope(worktree)
         return worktree
@@ -264,7 +244,7 @@ class Worktree(ScopedConfigObject):
     @classmethod
     def get_by_path(cls, git, project, path):
         """Given a Project section and a path, get the associated Worktree."""
-        pathsection = cls.Path.get(git, project.section, path)
+        pathsection = cls.Path.get(git, project.get_section(), path)
         if hasattr(pathsection, 'worktree'):
             assert pathsection.worktree
             return cls.get(git, project, pathsection.worktree, path=path)
@@ -272,7 +252,7 @@ class Worktree(ScopedConfigObject):
 
     def add(self):
         """Create a new worktree"""
-        self._git.add_worktree(self.name, self.path, self.committish)
+        self._git.add_worktree(self.get_ident(), self.path, self.committish)
 
     def rm(self):
         """Remove a worktree, deleting its workarea, builds and installs."""
@@ -314,7 +294,7 @@ class WorktreePlugin(Plugin):
         path.resolve()
         while True:
             if ConfigObject.exists(git,
-                                   project.section,
+                                   project.get_section(),
                                    Worktree.Path.subsection(),
                                    str(path)):
                 worktree = Worktree.get_by_path(git, project, str(path))
@@ -332,12 +312,7 @@ class WorktreePlugin(Plugin):
                                                 Worktree.get_managing_command(),
                                                 Worktree.get_managing_command(),
                                                 help='Manage worktrees',
-                                                formatter_class=argparse.RawDescriptionHelpFormatter,
-                                                epilog=gen_config_epilog(Worktree,
-                                                                         project,
-                                                                         Worktree.subsection(),
-                                                                         Worktree.configitems(),
-                                                                         secparam='<name>'))
+                                                formatter_class=argparse.RawDescriptionHelpFormatter)
 
         worktree_subparser = parser_manager.add_subparser(worktree_parser,
                                                           'worktree-command',

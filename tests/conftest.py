@@ -55,18 +55,18 @@ def clone_parser_manager(request, git, gitproject, project, parser_manager):
 
 @pytest.fixture(scope="function")
 def build_git(request, git, project):
-    git.config.set_item(f'{project.section}.build.test', 'command', 'make test')
-    git.config.set_item(f'{project.section}.build.test', 'description', 'Run tests')
+    git.config.set_item(f'{project.get_section()}.build.test', 'command', 'make test')
+    git.config.set_item(f'{project.get_section()}.build.test', 'description', 'Run tests')
     return git
 
 @pytest.fixture(scope="function")
 def configure_git(request, git, project):
-    git.config.set_item(f'{project.section}.configure.debug', 'command', 'cmake debug')
-    git.config.set_item(f'{project.section}.configure.debug', 'description', 'Configure debug build')
+    git.config.set_item(f'{project.get_section()}.configure.debug', 'command', 'cmake debug')
+    git.config.set_item(f'{project.get_section()}.configure.debug', 'description', 'Configure debug build')
     return git
 
 @pytest.fixture(scope="function")
 def install_git(request, git, project):
-    git.config.set_item(f'{project.section}.install.test', 'command', 'make install')
-    git.config.set_item(f'{project.section}.install.test', 'description', 'Install build')
+    git.config.set_item(f'{project.get_section()}.install.test', 'command', 'make install')
+    git.config.set_item(f'{project.get_section()}.install.test', 'description', 'Install build')
     return git

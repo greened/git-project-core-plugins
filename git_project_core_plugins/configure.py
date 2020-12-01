@@ -25,8 +25,8 @@ git-project configure <flavor>
 
 """
 
-from git_project import RunnableConfigObject, ConfigObjectItem, Plugin, Project
-from git_project import get_or_add_top_level_command, gen_runnable_epilog
+from git_project import RunnableConfigObject, Plugin, Project
+from git_project import get_or_add_top_level_command
 
 import argparse
 from pathlib import Path
@@ -49,19 +49,11 @@ class Configure(RunnableConfigObject):
 
     """
 
-    _configitems = [ConfigObjectItem('command',
-                                     None,
-                                     'Command to configure project'),
-                    ConfigObjectItem('description',
-                                     None,
-                                     'Configure flavor help')]
-
     def __init__(self,
                  git,
                  project_section,
                  subsection,
                  ident,
-                 configitems,
                  **kwargs):
         """Configure construction.
 
@@ -75,9 +67,6 @@ class Configure(RunnableConfigObject):
 
         ident: The name of this specific Configure.
 
-        configitems: A list of ConfigObjectItem describing members of the config
-                     section.
-
         **kwargs: Keyword arguments of property values to set upon construction.
 
         """
@@ -85,7 +74,6 @@ class Configure(RunnableConfigObject):
                          project_section,
                          subsection,
                          ident,
-                         configitems,
                          **kwargs)
 
     @staticmethod
@@ -107,10 +95,9 @@ class Configure(RunnableConfigObject):
 
         """
         return super().get(git,
-                           project.section,
+                           project.get_section(),
                            cls.subsection(),
-                           flavor,
-                           cls.configitems())
+                           flavor)
 
     @staticmethod
     def substitutions():
@@ -132,7 +119,7 @@ class ConfigurePlugin(Plugin):
             add_parser = get_or_add_top_level_command(parser_manager,
                                                       'add',
                                                       'add',
-                                                      help=f'Add config sections to {project.section}')
+                                                      help=f'Add config sections to {project.get_section()}')
 
             add_subparser = parser_manager.get_or_add_subparser(add_parser,
                                                                 'add-command',
@@ -141,7 +128,7 @@ class ConfigurePlugin(Plugin):
             add_configure_parser = parser_manager.add_parser(add_subparser,
                                                              Configure.get_managing_command(),
                                                              'add-' + Configure.get_managing_command(),
-                                                             help=f'Add a configure to {project.section}')
+                                                             help=f'Add a configure to {project.get_section()}')
 
             add_configure_parser.set_defaults(func=command_add_configure)
 
@@ -162,13 +149,7 @@ class ConfigurePlugin(Plugin):
                                                          Configure.get_managing_command(),
                                                          help='Configure project',
                                                          formatter_class=
-                                                         argparse.RawDescriptionHelpFormatter,
-                                                         epilog=
-                                                         gen_runnable_epilog(Configure,
-                                                                             project,
-                                                                             Configure.subsection(),
-                                                                             Configure.configitems(),
-                                                                             secparam='<flavor>'))
+                                                         argparse.RawDescriptionHelpFormatter)
 
             configure_parser.set_defaults(func=command_configure)
 
@@ -224,40 +205,6 @@ class ConfigurePlugin(Plugin):
                 return worktree
 
             worktree_add_parser.set_defaults(func=configure_command_worktree_add)
-
-    def add_class_hooks(self, git, plugin_manager):
-        """Add hooks for build."""
-        Project.add_config_item('configure',
-                                None,
-                                'Configures for the project')
-        Project.add_config_item('builddir',
-                                None,
-                                'Default project build directory')
-        Project.add_config_item('buildwidth',
-                                '1',
-                                'Default project build width')
-        Project.add_config_item('prefix',
-                                None,
-                                'Default project install directory')
-        Project.add_config_item('sharedir',
-                                None,
-                                'Default project shared install directory')
-
-        for plugin in plugin_manager.iterplugins():
-            for cls in plugin.iterclasses():
-                if cls.__name__ == 'Worktree':
-                    cls.add_config_item('builddir',
-                                        None,
-                                        'Default worktree build directory')
-                    cls.add_config_item('buildwidth',
-                                        '1',
-                                        'Default worktree build width')
-                    cls.add_config_item('prefix',
-                                        None,
-                                        'Worktree install directory')
-                    cls.add_config_item('sharedir',
-                                        None,
-                                        'Worktree shared install directory')
 
     def iterclasses(self):
         """Iterate over public classes for git-project configure."""

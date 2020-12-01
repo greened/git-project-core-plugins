@@ -83,38 +83,3 @@ def test_configure_get_with_repo(reset_directory, configure_git, project):
 
 def test_configure_get_managing_command():
     assert Configure.get_managing_command() == 'configure'
-
-def test_configure_add_hooks(reset_directory,
-                             git,
-                             gitproject,
-                             project,
-                             worktree_plugin_manager):
-    plugin = ConfigurePlugin()
-
-    plugin.add_class_hooks(git, worktree_plugin_manager)
-
-    found_configure = False
-    found_prefix = False
-    found_sharedir = False
-    for item in git_project.Project.configitems():
-        if item.key == 'configure':
-            found_configure = True
-        elif item.key == 'prefix':
-            found_prefix = True
-        elif item.key == 'sharedir':
-            found_sharedir = True
-
-    assert found_configure
-    assert found_prefix
-    assert found_sharedir
-
-    found_prefix = False
-    found_sharedir = False
-    for item in common.Worktree.configitems():
-        if item.key == 'prefix':
-            found_prefix = True
-        elif item.key == 'sharedir':
-            found_sharedir = True
-
-    assert found_prefix
-    assert found_sharedir
