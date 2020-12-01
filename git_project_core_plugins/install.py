@@ -86,7 +86,7 @@ class Install(RunnableConfigObject):
         return 'install'
 
     @classmethod
-    def get(cls, git, project, flavor):
+    def get(cls, git, project, flavor, **kwargs):
         """Factory to construct Installs.
 
         cls: The derived class being constructed.
@@ -97,11 +97,14 @@ class Install(RunnableConfigObject):
 
         flavor: Name of the install to construct.
 
+        kwargs: Attributes to set.
+
         """
         return super().get(git,
                            project.get_section(),
                            cls.subsection(),
-                           flavor)
+                           flavor,
+                           **kwargs)
 
     @classmethod
     def get_managing_command(cls):

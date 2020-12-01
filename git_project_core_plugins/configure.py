@@ -82,7 +82,7 @@ class Configure(RunnableConfigObject):
         return 'configure'
 
     @classmethod
-    def get(cls, git, project, flavor):
+    def get(cls, git, project, flavor, **kwargs):
         """Factory to construct Configures.
 
         cls: The derived class being constructed.
@@ -93,11 +93,14 @@ class Configure(RunnableConfigObject):
 
         flavor: Name of the configure to construct.
 
+        kwargs: Attributes to set.
+
         """
         return super().get(git,
                            project.get_section(),
                            cls.subsection(),
-                           flavor)
+                           flavor,
+                           **kwargs)
 
     @classmethod
     def get_managing_command(cls):

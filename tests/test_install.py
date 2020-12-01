@@ -62,3 +62,12 @@ def test_install_get_with_repo(reset_directory, install_git, project):
 
 def test_install_get_managing_command():
     assert Install.get_managing_command() == 'install'
+
+def test_install_get_kwargs(reset_directory, install_git, project):
+    install = Install.get(install_git,
+                          project,
+                          'test',
+                          command='test command')
+
+    assert install.command == 'test command'
+    assert install.description == 'Install build'
