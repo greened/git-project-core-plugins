@@ -23,7 +23,7 @@ def readme():
         return f.read()
 
 setup(name='git_project_core_plugins',
-      version='0.0.4',
+      version='0.0.5',
       description='Core functionality for git-project',
       long_description=readme(),
       classifiers=[
