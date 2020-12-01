@@ -99,14 +99,6 @@ class Configure(RunnableConfigObject):
                            cls.subsection(),
                            flavor)
 
-    @staticmethod
-    def substitutions():
-        """RunnableConfigObject protocol substitutions."""
-        return [ConfigObjectItem('path', None, 'Workarea root directory'),
-                ConfigObjectItem('builddir', None, 'Project or worktree build directory'),
-                ConfigObjectItem('prefix', None, 'Project or worktree install directory'),
-                ConfigObjectItem('buildwidth', None, 'Project or worktree build width')]
-
     @classmethod
     def get_managing_command(cls):
         return 'configure'

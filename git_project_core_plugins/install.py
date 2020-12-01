@@ -103,16 +103,6 @@ class Install(RunnableConfigObject):
                            cls.subsection(),
                            flavor)
 
-    @staticmethod
-    def substitutions():
-        """RunnableConfigObject protocol substitutions."""
-        return [ConfigObjectItem('prefix',
-                                 None,
-                                 'Root install directory'),
-                ConfigObjectItem('sharedir',
-                                 None,
-                                 'Where to place installed files shared across projects')]
-
     @classmethod
     def get_managing_command(cls):
         return 'install'

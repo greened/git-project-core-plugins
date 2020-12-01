@@ -25,7 +25,7 @@ git-project build <flavor>
 
 """
 
-from git_project import RunnableConfigObject, ConfigObjectItem, Plugin, Project
+from git_project import RunnableConfigObject, Plugin, Project
 from git_project import get_or_add_top_level_command
 
 import argparse
@@ -107,13 +107,6 @@ class Build(RunnableConfigObject):
                            cls.subsection(),
                            flavor,
                            **kwargs)
-
-    @staticmethod
-    def substitutions():
-        """RunnableConfigObject protocol substitutions."""
-        return [ConfigObjectItem('path', None, 'Workarea root directory'),
-                ConfigObjectItem('builddir', None, 'Build directory'),
-                ConfigObjectItem('buildwidth', 1, 'Build width')]
 
     @classmethod
     def get_managing_command(cls):

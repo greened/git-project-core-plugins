@@ -26,7 +26,7 @@ git-project branch status [<pattern>]
 git-project branch prune [--no-ask] [<pattern>]
 
 """
-from git_project import Git, RunnableConfigObject, ConfigObjectItem, Plugin
+from git_project import Git, RunnableConfigObject, Plugin
 from git_project import add_top_level_command, Project, GitProjectException
 
 import getpass
