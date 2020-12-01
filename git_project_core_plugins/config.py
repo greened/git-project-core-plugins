@@ -25,7 +25,7 @@ git-project config <key> [--unset] [<value>]
 
 """
 
-from git_project import ConfigObject, RunnableConfigObject, ConfigObjectItem
+from git_project import ConfigObject, RunnableConfigObject
 from git_project import Plugin, Project, GitProjectException
 
 def command_config(git, gitproject, project, clargs):

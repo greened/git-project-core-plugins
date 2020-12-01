@@ -18,7 +18,7 @@
 
 import pytest
 
-from git_project import ConfigObject, ConfigObjectItem
+from git_project import ConfigObject
 
 from git_project.test_support import ParserManagerMock
 from git_project.test_support import PluginMock
