@@ -45,32 +45,6 @@ def test_configure_add_arguments(reset_directory,
 
     assert configure_parser.get_default('func').__name__ == 'command_configure'
 
-def test_configure_modify_arguments(reset_directory,
-                                    git,
-                                    gitproject,
-                                    project,
-                                    worktree_parser_manager,
-                                    plugin_manager):
-    plugin = ConfigurePlugin()
-
-    plugin.modify_arguments(git,
-                            gitproject,
-                            project,
-                            worktree_parser_manager,
-                            plugin_manager)
-
-    worktree_add_parser = worktree_parser_manager.find_parser('worktree-add')
-
-    worktree_add_args = [
-        '--buildwidth',
-        '--prefix',
-        '--sharedir',
-    ]
-
-    common.check_args(worktree_add_parser, worktree_add_args)
-
-    assert worktree_add_parser.get_default('func').__name__ == 'configure_command_worktree_add'
-
 def test_configure_get_no_repo(reset_directory, git, project):
     configure = Configure.get(git, project, 'debug')
 
