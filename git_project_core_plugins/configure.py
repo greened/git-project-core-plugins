@@ -152,55 +152,6 @@ class ConfigurePlugin(Plugin):
                 configure_parser.add_argument('flavor', choices=configures,
                                             help='Configure type')
 
-    def modify_arguments(self, git, gitproject, project, parser_manager, plugin_manager):
-        worktree_add_parser = parser_manager.find_parser('worktree-add')
-
-        worktree_add_parser.add_argument('--buildwidth',
-                                         dest='buildwidth',
-                                         metavar='WIDTH',
-                                         help='Default build width for worktree [default: project build width]')
-
-        worktree_add_parser.add_argument('--builddir',
-                                         dest='builddir',
-                                         metavar='DIR',
-                                         help='Where to place build artifacts for worktree [default: project builddir/name]')
-
-        worktree_add_parser.add_argument('--prefix',
-                                         metavar='DIR',
-                                         help='Where to install for worktree [default: project prefix/name]')
-
-        worktree_add_parser.add_argument('--sharedir',
-                                         metavar='DIR',
-                                         help='Where to install shared files for worktree [default: project sharedir]')
-
-        if worktree_add_parser:
-            command_worktree_add = worktree_add_parser.get_default('func')
-
-            def configure_command_worktree_add(p_git, p_gitproject, p_project, clargs):
-                worktree = command_worktree_add(p_git, p_gitproject, p_project, clargs)
-
-                prefix = clargs.prefix if hasattr(clargs, 'prefix') else None
-                if not prefix and hasattr(project, 'prefix'):
-                    prefix = str(Path(project.prefix) / worktree.name)
-                if prefix:
-                    worktree.set_item('prefix', prefix)
-
-                sharedir = clargs.sharedir if hasattr(clargs, 'sharedir') else None
-                if not sharedir and hasattr(project, 'sharedir'):
-                    sharedir = str(Path(project.sharedir) / worktree.name)
-                if sharedir:
-                    worktree.set_itme('sharedir', sharedir)
-
-                builddir = clargs.builddir if hasattr(clargs, 'builddir') else None
-                if not builddir and hasattr(project, 'builddir'):
-                    builddir = str(Path(project.builddir) / worktree.name)
-                if builddir:
-                    worktree.set_item('builddir', builddir)
-
-                return worktree
-
-            worktree_add_parser.set_defaults(func=configure_command_worktree_add)
-
     def iterclasses(self):
         """Iterate over public classes for git-project configure."""
         yield Configure
