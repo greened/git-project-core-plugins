@@ -16,6 +16,8 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+import re
+
 import git_project
 from git_project_core_plugins import Build, BuildPlugin
 import common
@@ -70,3 +72,22 @@ def test_build_get_kwargs(reset_directory, build_git, project):
 
     assert build.command == 'test command'
     assert build.description == 'Run tests'
+
+def test_build_add_and_run(git_project_runner,
+                           git,
+                           capsys):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'build',
+                           'test',
+                           '{path}/doit {branch}')
+
+    git_project_runner.run(re.escape(f'{workdir}/doit master'),
+                           '.*',
+                           'build',
+                           'test')

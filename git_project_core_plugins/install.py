@@ -41,7 +41,7 @@ import argparse
 def command_install(git, gitproject, project, clargs):
     """Implement git-project install."""
     install = Install.get(git, project, clargs.flavor)
-    install.run(git, project)
+    install.run(git, project, clargs)
 
 def command_add_install(git, gitproject, project, clargs):
     """Implement git-project add install"""

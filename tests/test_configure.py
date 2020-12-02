@@ -16,6 +16,8 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+import re
+
 import git_project
 from git_project_core_plugins import Configure, ConfigurePlugin
 import common
@@ -92,3 +94,21 @@ def test_configure_get_kwargs(reset_directory, configure_git, project):
 
     assert configure.command == 'test command'
     assert configure.description == 'Configure debug build'
+
+def test_configure_add_and_run(git_project_runner,
+                               git):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'configure',
+                           'test',
+                           '{path}/doit {branch}')
+
+    git_project_runner.run(re.escape(f'{workdir}/doit master'),
+                           '.*',
+                           'configure',
+                           'test')
