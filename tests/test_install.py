@@ -87,3 +87,27 @@ def test_install_add_and_run(git_project_runner,
                            '.*',
                            'install',
                            'test')
+
+def test_install_recursive_sub(git_project_runner,
+                                 git):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*',
+                           '',
+                           'config',
+                           'builddir',
+                           '{path}/{branch}')
+
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'install',
+                           'test',
+                           '{builddir}/doit {branch}')
+
+    git_project_runner.run(re.escape(f'{workdir}/master/doit master'),
+                           '.*',
+                           'install',
+                           'test')
