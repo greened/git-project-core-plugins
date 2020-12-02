@@ -16,10 +16,7 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-import os
-
-from pathlib import Path
-import shutil
+import re
 
 import git_project
 from git_project_core_plugins import Install, InstallPlugin
@@ -71,3 +68,22 @@ def test_install_get_kwargs(reset_directory, install_git, project):
 
     assert install.command == 'test command'
     assert install.description == 'Install build'
+
+def test_install_add_and_run(git_project_runner,
+                             git,
+                             capsys):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'install',
+                           'test',
+                           '{path}/doit {branch}')
+
+    git_project_runner.run(re.escape(f'{workdir}/doit master'),
+                           '.*',
+                           'install',
+                           'test')

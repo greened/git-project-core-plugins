@@ -34,7 +34,7 @@ from pathlib import Path
 def command_configure(git, gitproject, project, clargs):
     """Implement git-project configure"""
     configure = Configure.get(git, project, clargs.flavor)
-    configure.run(clargs)
+    configure.run(git, project, clargs)
 
 def command_add_configure(git, gitproject, project, clargs):
     """Implement git-project add configure"""
