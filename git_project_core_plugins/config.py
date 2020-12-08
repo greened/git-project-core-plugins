@@ -54,7 +54,10 @@ def command_config(git, gitproject, project, clargs):
         if clargs.unset:
             configitem.rm_item(clargs.name, clargs.value)
         else:
-            setattr(configitem, clargs.name, clargs.value)
+            if clargs.add:
+                configitem.add_item(clargs.name, clargs.value)
+            else:
+                setattr(configitem, clargs.name, clargs.value)
     elif clargs.unset:
         delattr(configitem, clargs.name)
     else:
