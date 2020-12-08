@@ -20,6 +20,7 @@ import pytest
 
 from git_project import ConfigObject
 
+from git_project.test_support import check_config_file
 from git_project.test_support import ParserManagerMock
 from git_project.test_support import PluginMock
 from git_project.test_support import orig_repository

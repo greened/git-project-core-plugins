@@ -16,8 +16,11 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+from git_project.test_support import check_config_file
 from git_project_core_plugins import ConfigPlugin
 import common
+
+import os
 
 def test_config_add_arguments(reset_directory,
                               git,
@@ -82,3 +85,37 @@ def test_config(reset_directory,
     command_config(git, gitproject, project, common.AttrDict(clargs))
 
     assert not hasattr(project, 'remote')
+
+def test_shell_add(reset_directory, git_project_runner, git):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*',
+                           '',
+                           'config',
+                           'builddir',
+                           '{path}/{branch}')
+
+    git_project_runner.run('.*',
+                           '',
+                           'config',
+                           'flavor',
+                           'devrel')
+
+    git_project_runner.run('.*',
+                           '',
+                           'config',
+                           '--add',
+                           'flavor',
+                           'check-devrel')
+
+    os.chdir(git._repo.path)
+
+    check_config_file('project',
+                      'builddir',
+                      {'{path}/{branch}'})
+
+    check_config_file('project',
+                      'flavor',
+                      {'devrel', 'check-devrel'})
