@@ -16,9 +16,11 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+import os
 import re
 
 import git_project
+from git_project.test_support import check_config_file
 from git_project_core_plugins import Configure, ConfigurePlugin
 import common
 
@@ -110,3 +112,52 @@ def test_configure_recursive_sub(git_project_runner,
                            '.*',
                            'configure',
                            'test')
+
+def test_configure_no_dup(reset_directory, git_project_runner, git):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*',
+                           '',
+                           'config',
+                           'builddir',
+                           '{path}/{branch}')
+
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'configure',
+                           'devrel',
+                           '{builddir}/doit {branch}')
+
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'configure',
+                           'check-devrel',
+                           '{builddir}/check-doit {branch}')
+
+    os.chdir(git._repo.path)
+
+    check_config_file('project',
+                      'configure',
+                      {'devrel', 'check-devrel'})
+
+    git_project_runner.run(re.escape(f'{workdir}/master/doit master'),
+                           '.*',
+                           'configure',
+                           'devrel')
+
+    check_config_file('project',
+                      'configure',
+                      {'devrel', 'check-devrel'})
+
+    git_project_runner.run(re.escape(f'{workdir}/master/check-doit master'),
+                           '.*',
+                           'configure',
+                           'check-devrel')
+
+    check_config_file('project',
+                      'configure',
+                      {'devrel', 'check-devrel'})
