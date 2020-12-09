@@ -119,3 +119,50 @@ def test_shell_add(reset_directory, git_project_runner, git):
     check_config_file('project',
                       'flavor',
                       {'devrel', 'check-devrel'})
+
+def test_shell_no_dup(reset_directory, git_project_runner, git):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*',
+                           '',
+                           'config',
+                           'builddir',
+                           '{path}/{branch}')
+
+    git_project_runner.run('.*',
+                           '',
+                           'config',
+                           'flavor',
+                           'devrel')
+
+    git_project_runner.run('.*',
+                           '',
+                           'config',
+                           '--add',
+                           'flavor',
+                           'check-devrel')
+
+    os.chdir(git._repo.path)
+
+    check_config_file('project',
+                      'builddir',
+                      {'{path}/{branch}'})
+
+    check_config_file('project',
+                      'flavor',
+                      {'devrel', 'check-devrel'})
+
+    git_project_runner.run('{path}/{branch}',
+                           '',
+                           'config',
+                           'builddir')
+
+    check_config_file('project',
+                      'builddir',
+                      {'{path}/{branch}'})
+
+    check_config_file('project',
+                      'flavor',
+                      {'devrel', 'check-devrel'})
