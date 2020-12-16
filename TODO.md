@@ -38,3 +38,12 @@ TODOs
     worktree = {builddir}
 
     git project worktree rm mytree  # Deletes the corresponding build directory
+
+* Add ConfigObject identity substitution:
+
+    [run "test"]
+    command = make -C {path}/../{worktree}
+
+  Here `{worktree}` would be replaced by the identity of the active worktrree.
+  Substitutions should match the subsection of a ConfigObject and be replaced by
+  its identity.
