@@ -26,35 +26,13 @@ git-project run <name>
 
 """
 
-from git_project import RunnableConfigObject, Plugin, Project
+from git_project import ConfigObject, RunnableConfigObject, Plugin, Project
 from git_project import get_or_add_top_level_command
 
 import argparse
 
-def command_run(git, gitproject, project, clargs):
-    """Implement git-project run"""
-    run = Run.get(git, project, clargs.name)
-    run.run(git, project, clargs)
-
-def command_add_run(git, gitproject, project, clargs):
-    """Implement git-project add run"""
-    run = Run.get(git, project, clargs.name, command=clargs.command)
-    project.add_item('run', clargs.name)
-
-    return run
-
-def command_rm_run(git, gitproject, project, clargs):
-    """Implement git-project rm run"""
-    run = Run.get(git, project, clargs.name, command=clargs.command)
-    run.rm()
-    print(f'Removing project run {clargs.name}')
-    project.rm_item('run', clargs.name)
-
-class Run(RunnableConfigObject):
-    """A RunnableConfigObject to manage run names.  Each run name gets its
-    own config section.
-
-    """
+class RunConfig(ConfigObject):
+    """A ConfigObject to manage run aliases."""
 
     @staticmethod
     def subsection():
@@ -65,9 +43,9 @@ class Run(RunnableConfigObject):
                  git,
                  project_section,
                  subsection,
-                 ident,
+                 ident = None,
                  **kwargs):
-        """Run construction.
+        """RunConfig construction.
 
         cls: The derived class being constructed.
 
@@ -76,8 +54,6 @@ class Run(RunnableConfigObject):
         project_section: git config section of the active project.
 
         subsection: An arbitrarily-long subsection appended to project_section
-
-        ident: The name of this specific Run.
 
         **kwargs: Keyword arguments of property values to set upon construction.
 
@@ -89,8 +65,8 @@ class Run(RunnableConfigObject):
                          **kwargs)
 
     @classmethod
-    def get(cls, git, project, name, **kwargs):
-        """Factory to construct Runs.
+    def get(cls, git, project, **kwargs):
+        """Factory to construct RunConfigs.
 
         cls: The derived class being constructed.
 
@@ -98,90 +74,225 @@ class Run(RunnableConfigObject):
 
         project: The currently active Project.
 
-        name: Name of the command to run.
-
         kwargs: Attributes to set.
 
         """
         return super().get(git,
                            project.get_section(),
                            cls.subsection(),
-                           name,
+                           None,
                            **kwargs)
-
-    @classmethod
-    def get_managing_command(cls):
-        return 'run'
 
 class RunPlugin(Plugin):
     """A plugin to add the run command to git-project"""
+
+    def __init__(self):
+        self.classes = dict()
+        self.classes['run'] = self._make_alias_class('run')
+
+    def _make_alias_class(self, alias):
+        # Create a class for the alias.
+        @staticmethod
+        def subsection():
+            """ConfigObject protocol subsection."""
+            return alias
+
+        @classmethod
+        def get_managing_command(cls):
+            return alias
+
+        Class = type(alias + "Class", (RunnableConfigObject, ), {
+#            __doc__ = f"""A RunnableConfigObject to manage {alias} names.  Each run name gets its own
+#            config section.
+#
+#            """
+                'subsection': subsection,
+                'get_managing_command': get_managing_command
+        })
+
+        def cons(self,
+                 git,
+                 project_section,
+                 subsection,
+                 ident,
+                 **kwargs):
+            f"""{alias} construction.
+
+            cls: The derived class being constructed.
+
+            git: An object to query the repository and make config changes.
+
+            project_section: git config section of the active project.
+
+            subsection: An arbitrarily-long subsection appended to project_section
+
+            ident: The name of this specific {alias}.
+
+            **kwargs: Keyword arguments of property values to set upon construction.
+
+            """
+            super(Class, self).__init__(git,
+                                        project_section,
+                                        subsection,
+                                        ident,
+                                        **kwargs)
+
+        @classmethod
+        def get(cls, git, project, name, **kwargs):
+            f"""Factory to construct {alias}s.
+
+            cls: The derived class being constructed.
+
+            git: An object to query the repository and make config changes.
+
+            project: The currently active Project.
+
+            name: Name of the command to run.
+
+            kwargs: Attributes to set.
+
+            """
+            return super(Class, cls).get(git,
+                                         project.get_section(),
+                                         cls.subsection(),
+                                         name,
+                                         **kwargs)
+
+        Class.__init__ = cons
+        Class.get = get
+
+        self.classes[alias] = Class
+        return Class
+
+    def _gen_runs_epilog(self, alias, runs):
+        result = f'Available {alias}s:\n'
+        for run in runs:
+            result += f'    {run}\n'
+
+        return result
+
+    def _add_alias_arguments(self,
+                             git,
+                             gitproject,
+                             project,
+                             parser_manager,
+                             Class):
+        alias = Class.get_managing_command()
+
+        # add run
+        add_parser = get_or_add_top_level_command(parser_manager,
+                                                  'add',
+                                                  'add',
+                                                  help=f'Add config sections to {project.get_section()}')
+
+        add_subparser = parser_manager.get_or_add_subparser(add_parser,
+                                                            'add-command',
+                                                            help='add sections')
+
+        add_run_parser = parser_manager.add_parser(add_subparser,
+                                                   alias,
+                                                   'add-' + alias,
+                                                   help=f'Add a {alias} to {project.get_section()}')
+
+        def command_add_run(git, gitproject, project, clargs):
+            f"""Implement git-project add {alias}"""
+            run = Class.get(git,
+                            project,
+                            clargs.name,
+                            command=clargs.command)
+            project.add_item(alias, clargs.name)
+            return run
+
+
+        add_run_parser.set_defaults(func=command_add_run)
+
+        add_run_parser.add_argument('name',
+                                    help='Name for the run')
+
+        add_run_parser.add_argument('command',
+                                    help='Command to run')
+
+        runs = []
+        if hasattr(project, alias):
+            runs = [run for run in project.iter_multival(alias)]
+
+        # rm run
+        rm_parser = get_or_add_top_level_command(parser_manager,
+                                                 'rm',
+                                                 'rm',
+                                                 help=f'Remove config sections from {project.get_section()}')
+
+        rm_subparser = parser_manager.get_or_add_subparser(rm_parser,
+                                                           'rm-command',
+                                                           help='rm sections')
+
+        rm_run_parser = parser_manager.add_parser(rm_subparser,
+                                                  alias,
+                                                  'rm-' + alias,
+                                                  help=f'Remove a {alias} from {project.get_section()}')
+
+        def command_rm_run(git, gitproject, project, clargs):
+            f"""Implement git-project rm {alias}"""
+            run = Run.get(git, project, alias, clargs.name, command=clargs.command)
+            run.rm()
+            print(f'Removing project {alias} {clargs.name}')
+            project.rm_item(alias, clargs.name)
+
+        rm_run_parser.set_defaults(func=command_rm_run)
+
+        if runs:
+            rm_run_parser.add_argument('name', choices=runs,
+                                       help='Command name')
+
+        # run
+        command_subparser = parser_manager.find_subparser('command')
+
+        run_parser = parser_manager.add_parser(command_subparser,
+                                               alias,
+                                               alias,
+                                               help=f'Invoke {alias}',
+                                               epilog=self._gen_runs_epilog(alias, runs),
+                                               formatter_class=
+                                               argparse.RawDescriptionHelpFormatter)
+
+        def command_run(git, gitproject, project, clargs):
+            """Implement git-project run"""
+            if clargs.make_alias:
+                run_config = RunConfig.get(git, project)
+                run_config.add_item('alias', clargs.name)
+            else:
+                if not clargs.name in runs:
+                    raise GitProjectException(f'Unknown {alias} "{clargs.name}," choose one of: {{ {runs} }}')
+                run = Class.get(git, project, clargs.name)
+                run.run(git, project, clargs)
+
+        run_parser.set_defaults(func=command_run)
+
+        run_parser.add_argument('--make-alias', action='store_true',
+                                help='Alias "{alias}" to another command')
+
+        run_parser.add_argument('name', help='Command name or alias')
+
     def add_arguments(self, git, gitproject, project, parser_manager):
         """Add arguments for 'git-project run.'"""
         if git.has_repo():
-            # add run
-            add_parser = get_or_add_top_level_command(parser_manager,
-                                                      'add',
-                                                      'add',
-                                                      help=f'Add config sections to {project.get_section()}')
+            # Get the global run ConfigObject and add any aliases.
+            run_config = RunConfig.get(git, project)
+            for alias in run_config.iter_multival('alias'):
 
-            add_subparser = parser_manager.get_or_add_subparser(add_parser,
-                                                                'add-command',
-                                                                help='add sections')
+                Class = self._make_alias_class(alias)
 
-            add_run_parser = parser_manager.add_parser(add_subparser,
-                                                       Run.get_managing_command(),
-                                                       'add-' + Run.get_managing_command(),
-                                                       help=f'Add a run to {project.get_section()}')
+            for Class in self.iterclasses():
+                self._add_alias_arguments(git,
+                                          gitproject,
+                                          project,
+                                          parser_manager,
+                                          Class)
 
-            add_run_parser.set_defaults(func=command_add_run)
-
-            add_run_parser.add_argument('name',
-                                        help='Name for the run')
-
-            add_run_parser.add_argument('command',
-                                        help='Command to run')
-
-            runs = []
-            if hasattr(project, 'run'):
-                runs = [run for run in project.iter_multival('run')]
-
-            # rm run
-            rm_parser = get_or_add_top_level_command(parser_manager,
-                                                     'rm',
-                                                     'rm',
-                                                     help=f'Remove config sections from {project.get_section()}')
-
-            rm_subparser = parser_manager.get_or_add_subparser(rm_parser,
-                                                               'rm-command',
-                                                               help='rm sections')
-
-            rm_run_parser = parser_manager.add_parser(rm_subparser,
-                                                      Run.get_managing_command(),
-                                                      'rm-' + Run.get_managing_command(),
-                                                      help=f'Remove a run from {project.get_section()}')
-
-            rm_run_parser.set_defaults(func=command_rm_run)
-
-            if runs:
-                rm_run_parser.add_argument('name', choices=runs,
-                                           help='Command name')
-
-            # run
-            command_subparser = parser_manager.find_subparser('command')
-
-            run_parser = parser_manager.add_parser(command_subparser,
-                                                   Run.get_managing_command(),
-                                                   Run.get_managing_command(),
-                                                   help='Run project',
-                                                   formatter_class=
-                                                   argparse.RawDescriptionHelpFormatter)
-
-            run_parser.set_defaults(func=command_run)
-
-            if runs:
-                run_parser.add_argument('name', choices=runs,
-                                        help='Command name')
+    def get_class_for(self, alias):
+        return self.classes[alias]
 
     def iterclasses(self):
         """Iterate over public classes for git-project run."""
-        yield Run
+        for key, Class in self.classes.items():
+            yield Class
