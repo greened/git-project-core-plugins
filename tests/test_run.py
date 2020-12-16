@@ -21,63 +21,55 @@ import re
 
 import git_project
 from git_project.test_support import check_config_file
-from git_project_core_plugins import Run, RunPlugin
+from git_project_core_plugins import RunPlugin
 import common
 
-plugin_name = 'run'
-plugin_class = Run
-plugins = [('run', RunPlugin)]
-
 def test_run_add_arguments(reset_directory,
-                           git,
-                           gitproject,
                            project,
-                           parser_manager):
-    plugin = RunPlugin()
-
-    project.add_item('run', 'debug')
+                           git_project_runner):
     project.add_item('run', 'release')
+    project.add_item('run', 'debug')
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
-
-    run_parser = parser_manager.find_parser(Run.get_managing_command())
-
-    run_args = [
-        'debug',
-        'release',
-    ]
-
-    common.check_args(run_parser, run_args)
-
-    assert run_parser.get_default('func').__name__ == 'command_run'
+    git_project_runner.run(r'(\s*debug\s*release|\s*release\s*debug)',
+                           '',
+                           'run',
+                           '--help')
 
 def test_run_get_no_repo(reset_directory, git, project):
+    plugin = RunPlugin()
+    Run = plugin.get_class_for('run')
     run = Run.get(git, project, 'test')
 
     assert not hasattr(run, 'command')
     assert not hasattr(run, 'description')
 
 def test_run_get_with_repo(reset_directory, run_git, project):
+    plugin = RunPlugin()
+    Run = plugin.get_class_for('run')
     run = Run.get(run_git, project, 'test')
 
     assert run.command == 'make test'
     assert run.description == 'Run tests'
 
 def test_run_get_managing_command():
+    plugin = RunPlugin()
+    Run = plugin.get_class_for('run')
     assert Run.get_managing_command() == 'run'
 
 def test_run_get_kwargs(reset_directory, run_git, project):
+    plugin = RunPlugin()
+    Run = plugin.get_class_for('run')
     run = Run.get(run_git,
-                      project,
-                      'test',
-                      command='test command')
+                  project,
+                  'test',
+                  command='test command')
 
     assert run.command == 'test command'
     assert run.description == 'Run tests'
 
 def test_run_add_and_run(git_project_runner,
-                           git,
-                           capsys):
+                         git,
+                         capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
@@ -95,7 +87,7 @@ def test_run_add_and_run(git_project_runner,
                            'test')
 
 def test_run_recursive_sub(git_project_runner,
-                             git):
+                           git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
@@ -166,3 +158,41 @@ def test_run_no_dup(reset_directory, git_project_runner, git):
     check_config_file('project',
                       'run',
                       {'devrel', 'check-devrel'})
+
+def test_run_add_alias(git_project_runner,
+                       git,
+                       capsys):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    # Add aliases.
+    git_project_runner.run('.*',
+                           '',
+                           'run',
+                           '--make-alias',
+                           'build')
+
+    git_project_runner.run('.*',
+                           '',
+                           'run',
+                           '--make-alias',
+                           'check')
+
+    check_config_file('project.run',
+                      'alias',
+                      {'build', 'check'})
+
+    # Add a build.
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'build',
+                           'test',
+                           '{path}/buildit {branch}')
+
+    # Check build invocation.
+    git_project_runner.run(re.escape(f'{workdir}/buildit master'),
+                           '.*',
+                           'build',
+                           'test')
