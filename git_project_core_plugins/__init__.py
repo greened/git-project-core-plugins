@@ -17,9 +17,7 @@
 #
 
 from .branch import BranchPlugin
-from .build import Build, BuildPlugin
+from .run import Run, RunPlugin
 from .clone import ClonePlugin
 from .config import ConfigPlugin
-from .configure import Configure, ConfigurePlugin
-from .install import Install, InstallPlugin
 from .worktree import Worktree, WorktreePlugin

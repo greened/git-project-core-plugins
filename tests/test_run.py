@@ -21,59 +21,63 @@ import re
 
 import git_project
 from git_project.test_support import check_config_file
-from git_project_core_plugins import Install, InstallPlugin
+from git_project_core_plugins import Run, RunPlugin
 import common
 
-def test_install_add_arguments(reset_directory,
-                               git,
-                               gitproject,
-                               project,
-                               parser_manager):
-    plugin = InstallPlugin()
+plugin_name = 'run'
+plugin_class = Run
+plugins = [('run', RunPlugin)]
 
-    project.add_item('install', 'debug')
-    project.add_item('install', 'release')
+def test_run_add_arguments(reset_directory,
+                           git,
+                           gitproject,
+                           project,
+                           parser_manager):
+    plugin = RunPlugin()
+
+    project.add_item('run', 'debug')
+    project.add_item('run', 'release')
 
     plugin.add_arguments(git, gitproject, project, parser_manager)
 
-    install_parser = parser_manager.find_parser(Install.get_managing_command())
+    run_parser = parser_manager.find_parser(Run.get_managing_command())
 
-    install_args = [
+    run_args = [
         'debug',
         'release',
     ]
 
-    common.check_args(install_parser, install_args)
+    common.check_args(run_parser, run_args)
 
-    assert install_parser.get_default('func').__name__ == 'command_install'
+    assert run_parser.get_default('func').__name__ == 'command_run'
 
-def test_install_get_no_repo(reset_directory, git, project):
-    install = Install.get(git, project, 'test')
+def test_run_get_no_repo(reset_directory, git, project):
+    run = Run.get(git, project, 'test')
 
-    assert not hasattr(install, 'command')
-    assert not hasattr(install, 'description')
+    assert not hasattr(run, 'command')
+    assert not hasattr(run, 'description')
 
-def test_install_get_with_repo(reset_directory, install_git, project):
-    install = Install.get(install_git, project, 'test')
+def test_run_get_with_repo(reset_directory, run_git, project):
+    run = Run.get(run_git, project, 'test')
 
-    assert install.command == 'make install'
-    assert install.description == 'Install build'
+    assert run.command == 'make test'
+    assert run.description == 'Run tests'
 
-def test_install_get_managing_command():
-    assert Install.get_managing_command() == 'install'
+def test_run_get_managing_command():
+    assert Run.get_managing_command() == 'run'
 
-def test_install_get_kwargs(reset_directory, install_git, project):
-    install = Install.get(install_git,
-                          project,
-                          'test',
-                          command='test command')
+def test_run_get_kwargs(reset_directory, run_git, project):
+    run = Run.get(run_git,
+                      project,
+                      'test',
+                      command='test command')
 
-    assert install.command == 'test command'
-    assert install.description == 'Install build'
+    assert run.command == 'test command'
+    assert run.description == 'Run tests'
 
-def test_install_add_and_run(git_project_runner,
-                             git,
-                             capsys):
+def test_run_add_and_run(git_project_runner,
+                           git,
+                           capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
@@ -81,17 +85,17 @@ def test_install_add_and_run(git_project_runner,
     git_project_runner.run('.*',
                            '',
                            'add',
-                           'install',
+                           'run',
                            'test',
                            '{path}/doit {branch}')
 
     git_project_runner.run(re.escape(f'{workdir}/doit master'),
                            '.*',
-                           'install',
+                           'run',
                            'test')
 
-def test_install_recursive_sub(git_project_runner,
-                                 git):
+def test_run_recursive_sub(git_project_runner,
+                             git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
@@ -99,22 +103,22 @@ def test_install_recursive_sub(git_project_runner,
     git_project_runner.run('.*',
                            '',
                            'config',
-                           'builddir',
+                           'rundir',
                            '{path}/{branch}')
 
     git_project_runner.run('.*',
                            '',
                            'add',
-                           'install',
+                           'run',
                            'test',
-                           '{builddir}/doit {branch}')
+                           '{rundir}/doit {branch}')
 
     git_project_runner.run(re.escape(f'{workdir}/master/doit master'),
                            '.*',
-                           'install',
+                           'run',
                            'test')
 
-def test_install_no_dup(reset_directory, git_project_runner, git):
+def test_run_no_dup(reset_directory, git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
@@ -122,43 +126,43 @@ def test_install_no_dup(reset_directory, git_project_runner, git):
     git_project_runner.run('.*',
                            '',
                            'config',
-                           'builddir',
+                           'rundir',
                            '{path}/{branch}')
 
     git_project_runner.run('.*',
                            '',
                            'add',
-                           'install',
+                           'run',
                            'devrel',
-                           '{builddir}/doit {branch}')
+                           '{rundir}/doit {branch}')
 
     git_project_runner.run('.*',
                            '',
                            'add',
-                           'install',
+                           'run',
                            'check-devrel',
-                           '{builddir}/check-doit {branch}')
+                           '{rundir}/check-doit {branch}')
 
     os.chdir(git._repo.path)
 
     check_config_file('project',
-                      'install',
+                      'run',
                       {'devrel', 'check-devrel'})
 
     git_project_runner.run(re.escape(f'{workdir}/master/doit master'),
                            '.*',
-                           'install',
+                           'run',
                            'devrel')
 
     check_config_file('project',
-                      'install',
+                      'run',
                       {'devrel', 'check-devrel'})
 
     git_project_runner.run(re.escape(f'{workdir}/master/check-doit master'),
                            '.*',
-                           'install',
+                           'run',
                            'check-devrel')
 
     check_config_file('project',
-                      'install',
+                      'run',
                       {'devrel', 'check-devrel'})

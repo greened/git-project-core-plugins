@@ -48,11 +48,9 @@ setup(name='git_project_core_plugins',
       entry_points = {
           'git_project.plugins': {
               'branch = git_project_core_plugins.branch:BranchPlugin',
-              'build = git_project_core_plugins.build:BuildPlugin',
+              'run = git_project_core_plugins.run:RunPlugin',
               'clone = git_project_core_plugins.clone:ClonePlugin',
-              'configure = git_project_core_plugins.configure:ConfigurePlugin',
               'config = git_project_core_plugins.config:ConfigPlugin',
-              'install = git_project_core_plugins.install:InstallPlugin',
               'worktree = git_project_core_plugins.worktree:WorktreePlugin',
           }
       },
