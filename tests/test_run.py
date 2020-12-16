@@ -196,3 +196,55 @@ def test_run_add_alias(git_project_runner,
                            '.*',
                            'build',
                            'test')
+
+def test_run_substitute_alias(git_project_runner,
+                              git,
+                              capsys):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    # Add aliases.
+    git_project_runner.run('.*',
+                           '',
+                           'run',
+                           '--make-alias',
+                           'build')
+
+    git_project_runner.run('.*',
+                           '',
+                           'run',
+                           '--make-alias',
+                           'check')
+
+    check_config_file('project.run',
+                      'alias',
+                      {'build', 'check'})
+
+    # Add a build.
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'build',
+                           'test',
+                           '{path}/buildit {branch} {build}')
+
+    # Add a check.
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'check',
+                           'test',
+                           '{path}/checkit {build}')
+
+    # Check build invocation.
+    git_project_runner.run(re.escape(f'{workdir}/buildit master test'),
+                           '.*',
+                           'build',
+                           'test')
+
+    # Check check invocation.
+    git_project_runner.run(re.escape(f'{workdir}/checkit test'),
+                           '.*',
+                           'check',
+                           'test')
