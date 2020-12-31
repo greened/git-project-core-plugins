@@ -65,6 +65,9 @@ def command_config(git, gitproject, project, clargs):
         print(value)
 
 class ConfigPlugin(Plugin):
+    def __init__(self):
+        super().__init__('config')
+
     def _add_config_parser(self, cls, project, parser_manager):
         command = cls.get_managing_command()
         config_key = command + '-config' if command else 'config'
@@ -99,7 +102,12 @@ class ConfigPlugin(Plugin):
             config_parser.add_argument('--unset', action='store_true',
                                        help='Remove a value from a property')
 
-    def add_arguments(self, git, gitproject, project, parser_manager):
+    def add_arguments(self,
+                      git,
+                      gitproject,
+                      project,
+                      parser_manager,
+                      plugin_manager):
         """Add arguments for 'git-project config'"""
         self._add_config_parser(Project, project, parser_manager)
 

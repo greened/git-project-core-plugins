@@ -16,6 +16,7 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
+from .artifact import Artifact, ArtifactPlugin
 from .branch import BranchPlugin
 from .run import RunPlugin
 from .clone import ClonePlugin

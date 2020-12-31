@@ -47,6 +47,7 @@ setup(name='git_project_core_plugins',
       ],
       entry_points = {
           'git_project.plugins': {
+              'artifact = git_project_core_plugins.artifact:ArtifactPlugin',
               'branch = git_project_core_plugins.branch:BranchPlugin',
               'run = git_project_core_plugins.run:RunPlugin',
               'clone = git_project_core_plugins.clone:ClonePlugin',

@@ -47,7 +47,15 @@ def command_clone(git, gitproject, project, clargs):
 
 class ClonePlugin(Plugin):
     """A plugin to implement the clone command."""
-    def add_arguments(self, git, gitproject, project, parser_manager):
+    def __init__(self):
+        super().__init__('clone')
+
+    def add_arguments(self,
+                      git,
+                      gitproject,
+                      project,
+                      parser_manager,
+                      plugin_manager):
         """Add arguments for 'git-project clone.'"""
         # clone
         clone_parser = add_top_level_command(parser_manager,

@@ -23,10 +23,15 @@ def test_add_arguments(reset_directory,
                        git,
                        gitproject,
                        project,
-                       parser_manager):
+                       parser_manager,
+                       plugin_manager):
     plugin = BranchPlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     branch_status_parser = parser_manager.find_parser('branch-status')
 
@@ -59,11 +64,16 @@ def test_branch_status(reset_directory,
                        gitproject,
                        project,
                        parser_manager,
+                       plugin_manager,
                        capsys,
                        script_runner):
     plugin = BranchPlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     branch_status_parser = parser_manager.find_parser('branch-status')
 
@@ -108,10 +118,15 @@ def test_branch_prune(reset_directory,
                       gitproject,
                       project,
                       parser_manager,
+                      plugin_manager,
                       capsys):
     plugin = BranchPlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     branch_prune_parser = parser_manager.find_parser('branch-prune')
 
