@@ -27,7 +27,7 @@ git-project run <name>
 """
 
 from git_project import ConfigObject, RunnableConfigObject, Plugin, Project
-from git_project import get_or_add_top_level_command
+from git_project import get_or_add_top_level_command, GitProjectException
 
 import argparse
 
@@ -87,6 +87,7 @@ class RunPlugin(Plugin):
     """A plugin to add the run command to git-project"""
 
     def __init__(self):
+        super().__init__('run')
         self.classes = dict()
         self.classes['run'] = self._make_alias_class('run')
 
@@ -99,6 +100,7 @@ class RunPlugin(Plugin):
 
         @classmethod
         def get_managing_command(cls):
+            """ConfigObject protocol get_managing_command."""
             return alias
 
         Class = type(alias + "Class", (RunnableConfigObject, ), {
@@ -273,7 +275,12 @@ class RunPlugin(Plugin):
 
         run_parser.add_argument('name', help='Command name or alias')
 
-    def add_arguments(self, git, gitproject, project, parser_manager):
+    def add_arguments(self,
+                      git,
+                      gitproject,
+                      project,
+                      parser_manager,
+                      plugin_manage):
         """Add arguments for 'git-project run.'"""
         if git.has_repo():
             # Get the global run ConfigObject and add any aliases.

@@ -137,7 +137,15 @@ def command_branch_prune(git, gitproject, project, clargs):
 
 class BranchPlugin(Plugin):
     """A plugin to add the branch command to git-project."""
-    def add_arguments(self, git, gitproject, project, parser_manager):
+    def __init__(self):
+        super().__init__('branch')
+
+    def add_arguments(self,
+                      git,
+                      gitproject,
+                      project,
+                      parser_manager,
+                      plugin_manager):
         """Add arguments for 'git project branch.'"""
         # branch
         branch_parser = add_top_level_command(parser_manager,

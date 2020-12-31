@@ -26,10 +26,15 @@ def test_config_add_arguments(reset_directory,
                               git,
                               gitproject,
                               project,
-                              parser_manager):
+                              parser_manager,
+                              plugin_manager):
     plugin = ConfigPlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     config_parser = parser_manager.find_parser('config')
 
@@ -49,10 +54,15 @@ def test_config(reset_directory,
                 git,
                 gitproject,
                 project,
-                parser_manager):
+                parser_manager,
+                plugin_manager):
     plugin = ConfigPlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     config_parser = parser_manager.find_parser('config')
 

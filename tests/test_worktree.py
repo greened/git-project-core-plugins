@@ -27,10 +27,15 @@ def test_worktree_add_arguments(reset_directory,
                                 git,
                                 gitproject,
                                 project,
-                                parser_manager):
+                                parser_manager,
+                                plugin_manager):
     plugin = WorktreePlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     worktree_add_parser = parser_manager.find_parser('worktree-add')
 

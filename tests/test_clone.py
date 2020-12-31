@@ -26,10 +26,15 @@ def test_add_arguments(reset_directory,
                        git,
                        gitproject,
                        project,
-                       parser_manager):
+                       parser_manager,
+                       plugin_manager):
     plugin = ClonePlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     clone_parser = parser_manager.find_parser('clone')
 
@@ -48,10 +53,15 @@ def test_clone(reset_directory,
                gitproject,
                project,
                parser_manager,
+               plugin_manager,
                remote_repository):
     plugin = ClonePlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     clone_parser = parser_manager.find_parser('clone')
 
@@ -72,10 +82,15 @@ def test_clone_bare(reset_directory,
                     gitproject,
                     project,
                     parser_manager,
+                    plugin_manager,
                     remote_repository):
     plugin = ClonePlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     clone_parser = parser_manager.find_parser('clone')
 
@@ -96,10 +111,15 @@ def test_clone_path(reset_directory,
                     gitproject,
                     project,
                     parser_manager,
+                    plugin_manager,
                     remote_repository):
     plugin = ClonePlugin()
 
-    plugin.add_arguments(git, gitproject, project, parser_manager)
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
 
     clone_parser = parser_manager.find_parser('clone')
 
