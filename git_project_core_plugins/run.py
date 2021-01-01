@@ -166,10 +166,17 @@ class RunPlugin(Plugin):
         self.classes[alias] = Class
         return Class
 
-    def _gen_runs_epilog(self, alias, runs):
+    def _gen_runs_epilog(self, git, project, alias, runs):
         result = f'Available {alias}s:\n'
+        run_width = 20
         for run in runs:
-            result += f'    {run}\n'
+            help_section = f'{project.get_section()}.help.{alias}.{run}'
+            help_key = 'short'
+            if git.config.has_item(help_section, help_key):
+                shorthelp = git.config.get_item(help_section, help_key)
+                result += f'    {run:<{run_width}} - {shorthelp}\n'
+            else:
+                result += f'    {run}\n'
 
         return result
 
@@ -253,7 +260,10 @@ class RunPlugin(Plugin):
                                                alias,
                                                alias,
                                                help=f'Invoke {alias}',
-                                               epilog=self._gen_runs_epilog(alias, runs),
+                                               epilog=self._gen_runs_epilog(git,
+                                                                            project,
+                                                                            alias,
+                                                                            runs),
                                                formatter_class=
                                                argparse.RawDescriptionHelpFormatter)
 
