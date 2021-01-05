@@ -28,6 +28,8 @@ git-project config <key> [--unset] [<value>]
 from git_project import ConfigObject, RunnableConfigObject
 from git_project import Plugin, Project, GitProjectException
 
+from git_project_core_plugins.common import add_plugin_version_argument
+
 def command_config(git, gitproject, project, clargs):
     """Implement git-project config."""
     getter = clargs.getter
@@ -72,6 +74,7 @@ class ConfigPlugin(Plugin):
         command = cls.get_managing_command()
         config_key = command + '-config' if command else 'config'
         config_parser = parser_manager.find_parser(config_key)
+
         if not config_parser:
             # Create a config parser under the managing command.
             command_subparser_key = command + '-command' if command else 'command'
@@ -94,6 +97,10 @@ class ConfigPlugin(Plugin):
             if hasattr(cls, 'subsection'):
                 config_parser.set_defaults(subsection=cls.subsection())
                 config_parser.add_argument('ident', help=f'{cls.__name__} to modify')
+
+            if not command:
+                # This is the top-level 'config' command.
+                add_plugin_version_argument(config_parser)
 
             config_parser.add_argument('name', help='Property name')
             config_parser.add_argument('value', nargs='?', help='Property value to set')

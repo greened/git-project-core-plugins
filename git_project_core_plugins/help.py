@@ -29,6 +29,8 @@ from git_project import ConfigObject, Plugin, Project
 from git_project import add_top_level_command, GitProjectException
 from git_project import get_or_add_top_level_command
 
+from git_project_core_plugins.common import add_plugin_version_argument
+
 from pydoc import pager
 
 def _print_general_help(git, gitproject, project, clargs):
@@ -191,6 +193,8 @@ class HelpPlugin(Plugin):
                                             help='Display help')
 
         help_parser.set_defaults(func=command_help)
+
+        add_plugin_version_argument(help_parser)
 
         help_parser.add_argument('options',
                                  nargs='*',

@@ -20,6 +20,7 @@ from .artifact import Artifact, ArtifactPlugin
 from .branch import BranchPlugin
 from .run import RunPlugin
 from .clone import ClonePlugin
+from .common import add_plugin_version_argument
 from .config import ConfigPlugin
 from .help import Help, HelpPlugin
 from .worktree import Worktree, WorktreePlugin

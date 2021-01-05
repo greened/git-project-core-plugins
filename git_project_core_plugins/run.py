@@ -29,6 +29,8 @@ git-project run <name>
 from git_project import ConfigObject, RunnableConfigObject, Plugin, Project
 from git_project import get_or_add_top_level_command, GitProjectException
 
+from git_project_core_plugins.common import add_plugin_version_argument
+
 import argparse
 
 class RunConfig(ConfigObject):
@@ -285,10 +287,16 @@ class RunPlugin(Plugin):
 
         run_parser.set_defaults(func=command_run)
 
+        add_plugin_version_argument(run_parser)
+
         run_parser.add_argument('--make-alias', action='store_true',
                                 help=f'Alias "{alias}" to another command')
 
         run_parser.add_argument('name', help='Command name or alias')
+
+        run_parser.add_argument('options',
+                                nargs='*',
+                                help='Additions options to pass to command')
 
     def add_arguments(self,
                       git,

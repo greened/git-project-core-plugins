@@ -28,6 +28,8 @@ git-project config <key> [--unset] [<value>]
 from git_project import ConfigObject, SubstitutableConfigObject, Plugin
 from git_project import run_command_with_shell, add_top_level_command
 
+from git_project_core_plugins.common import add_plugin_version_argument
+
 import argparse
 import re
 
@@ -173,6 +175,8 @@ class ArtifactPlugin(Plugin):
                                                 'artifact',
                                                 'artifact',
                                                 help='Manipulate artifacts')
+
+        add_plugin_version_argument(artifact_parser)
 
         artifact_subparser = parser_manager.add_subparser(artifact_parser,
                                                           'artifact-command',

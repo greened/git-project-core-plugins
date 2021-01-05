@@ -29,6 +29,8 @@ git-project branch prune [--no-ask] [<pattern>]
 from git_project import Git, RunnableConfigObject, Plugin
 from git_project import add_top_level_command, Project, GitProjectException
 
+from git_project_core_plugins.common import add_plugin_version_argument
+
 import getpass
 
 def query_yes_no(question, default="yes"):
@@ -152,6 +154,8 @@ class BranchPlugin(Plugin):
                                               'branch',
                                               'branch',
                                               help='Manipulate branches')
+
+        add_plugin_version_argument(branch_parser)
 
         branch_subparser = parser_manager.add_subparser(branch_parser,
                                                         'branch_command',
