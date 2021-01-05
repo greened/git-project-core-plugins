@@ -286,7 +286,7 @@ class RunPlugin(Plugin):
         run_parser.set_defaults(func=command_run)
 
         run_parser.add_argument('--make-alias', action='store_true',
-                                help='Alias "{alias}" to another command')
+                                help=f'Alias "{alias}" to another command')
 
         run_parser.add_argument('name', help='Command name or alias')
 
