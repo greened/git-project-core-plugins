@@ -27,6 +27,8 @@ git-project clone <url> [path] [--bare] [--no-master-worktree]
 
 from git_project import add_top_level_command, Plugin
 
+from git_project_core_plugins.common import add_plugin_version_argument
+
 import getpass
 import os
 from pathlib import Path
@@ -62,6 +64,8 @@ class ClonePlugin(Plugin):
                                              'clone',
                                              'clone',
                                              help='Clone project')
+
+        add_plugin_version_argument(clone_parser)
 
         clone_parser.set_defaults(func=command_clone)
 

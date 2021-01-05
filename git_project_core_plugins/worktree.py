@@ -30,6 +30,8 @@ from git_project import ConfigObject, Git, Plugin, Project
 from git_project import ScopedConfigObject
 from git_project import add_top_level_command, GitProjectException
 
+from git_project_core_plugins.common import add_plugin_version_argument
+
 import argparse
 import os
 from pathlib import Path
@@ -321,6 +323,8 @@ class WorktreePlugin(Plugin):
                                                 Worktree.get_managing_command(),
                                                 help='Manage worktrees',
                                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+
+        add_plugin_version_argument(worktree_parser)
 
         worktree_subparser = parser_manager.add_subparser(worktree_parser,
                                                           'worktree-command',
