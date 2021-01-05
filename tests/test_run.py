@@ -248,3 +248,46 @@ def test_run_substitute_alias(git_project_runner,
                            '.*',
                            'check',
                            'test')
+
+def test_run_substitute_options(git_project_runner,
+                                git,
+                                capsys):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    # Add a run.
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'run',
+                           'test',
+                           '{path}/buildit {options} {run}')
+
+    # Check run invocation.
+    git_project_runner.run(re.escape(f'{workdir}/buildit master test'),
+                           '.*',
+                           'run',
+                           'test',
+                           '{branch}')
+
+def test_run_substitute_empty_options(git_project_runner,
+                                git,
+                                capsys):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    # Add a run.
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'run',
+                           'test',
+                           '{path}/buildit {options} {run}')
+
+    # Check run invocation.
+    git_project_runner.run(re.escape(f'{workdir}/buildit  test'),
+                           '.*',
+                           'run',
+                           'test')
