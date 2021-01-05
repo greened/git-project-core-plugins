@@ -279,8 +279,18 @@ class RunPlugin(Plugin):
                     raise GitProjectException(f'Unknown {alias} "{clargs.name}," choose one of: {{ {runs} }}')
                 run = Class.get(git, project, clargs.name)
 
+                translation_table = dict.fromkeys(map(ord, '{}'), None)
+
+                option_names = ' '.join(clargs.options)
+                option_names = option_names.translate(translation_table)
+                option_key = '-'.join(clargs.options)
+                option_key = option_key.translate(translation_table)
+
                 formats = {
-                    'options': ' '.join(clargs.options)
+                    'options': ' '.join(clargs.options),
+                    'option_names': option_names,
+                    'option_key': option_key,
+                    'option_keysep': '-' if len(clargs.options) > 0 else ''
                 }
 
                 run.run(git, project, formats)
