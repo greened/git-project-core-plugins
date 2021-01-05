@@ -276,7 +276,12 @@ class RunPlugin(Plugin):
                 if not clargs.name in runs:
                     raise GitProjectException(f'Unknown {alias} "{clargs.name}," choose one of: {{ {runs} }}')
                 run = Class.get(git, project, clargs.name)
-                run.run(git, project, clargs)
+
+                formats = {
+                    'options': ' '.join(clargs.options)
+                }
+
+                run.run(git, project, formats)
 
         run_parser.set_defaults(func=command_run)
 
