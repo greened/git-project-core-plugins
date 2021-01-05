@@ -23,7 +23,7 @@ def readme():
         return f.read()
 
 setup(name='git_project_core_plugins',
-      version='0.0.8',
+      version='0.0.9',
       description='Core functionality for git-project',
       long_description=readme(),
       classifiers=[
@@ -41,7 +41,7 @@ setup(name='git_project_core_plugins',
       license='GPLv3+',
       packages=['git_project_core_plugins'],
       install_requires = [
-          'git_project>=0.0.8',
+          'git_project>=0.0.9',
           'progressbar2',
           'pygit2',
       ],
