@@ -60,12 +60,12 @@ def test_worktree_add_arguments(reset_directory,
 
     assert worktree_rm_parser.get_default('func').__name__ == 'command_worktree_rm'
 
-def test_worktree_modify_arguments(reset_directory,
-                                   git,
-                                   gitproject,
-                                   project,
-                                   clone_parser_manager,
-                                   plugin_manager):
+def test_worktree_modify_clone_arguments(reset_directory,
+                                         git,
+                                         gitproject,
+                                         project,
+                                         clone_parser_manager,
+                                         plugin_manager):
     plugin = WorktreePlugin()
 
     plugin.modify_arguments(git,
@@ -77,6 +77,24 @@ def test_worktree_modify_arguments(reset_directory,
     clone_parser = clone_parser_manager.find_parser('clone')
 
     assert clone_parser.get_default('func').__name__ == 'worktree_command_clone'
+
+def test_worktree_modify_init_arguments(reset_directory,
+                                        git,
+                                        gitproject,
+                                        project,
+                                        init_parser_manager,
+                                        plugin_manager):
+    plugin = WorktreePlugin()
+
+    plugin.modify_arguments(git,
+                            gitproject,
+                            project,
+                            init_parser_manager,
+                            plugin_manager)
+
+    init_parser = init_parser_manager.find_parser('init')
+
+    assert init_parser.get_default('func').__name__ == 'worktree_command_init'
 
 def test_worktree_get(reset_directory,
                       git,
@@ -192,3 +210,58 @@ def test_worktree_clone_path(git_project_runner,
 
     assert os.path.exists(str(repo_path / '.git'))
     assert os.path.exists(repo_path / 'master')
+
+def test_worktree_init(git,
+                       git_project_runner,
+                       tmp_path_factory):
+    path = tmp_path_factory.mktemp('clone-workdir')
+
+    os.chdir(path)
+
+    clone_path = git.clone('file://' + git.get_gitdir())
+
+    os.chdir(clone_path)
+    git = git_project.Git()
+
+    workarea = git.get_working_copy_root()
+
+    print(f'Workarea: {workarea}')
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'init',
+                           '--worktree')
+
+    assert os.path.exists(workarea / '.git')
+    assert not os.path.exists(workarea / 'MergedRemote.txt')
+    assert os.path.exists(workarea / 'master')
+
+def test_worktree_init_nonclean(git,
+                                git_project_runner):
+    workarea = git.get_working_copy_root()
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    # Remove a file from the index to make it unclean.
+    index = git._repo.index
+    index.read()
+
+    for entry in index:
+        index.remove(entry.path)
+        index.write()
+        break
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.expect_fail = True
+
+    git_project_runner.run('git-project: Cannot initialize worktree layout, working copy not clean',
+                           '',
+                           'init',
+                           '--worktree')

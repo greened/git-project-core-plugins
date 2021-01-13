@@ -376,10 +376,48 @@ class WorktreePlugin(Plugin):
             clone_parser.add_argument('--worktree', action='store_true',
                                       help='Create a layout convenient for worktree use')
 
+        # add an init option to create a worktree layout.
+        init_parser = parser_manager.find_parser('init')
+        if init_parser:
+            init_parser.add_argument('--worktree', action='store_true',
+                                     help='Create a layout convenient for worktree use')
+
+    def _rewrite_bare_refspects(self, p_git):
+        """Modify refspects to convert from a bare repository so that we merge origin
+        branches to local branches.
+
+        """
+        assert p_git.is_bare_repository()
+
+        p_git.set_remote_fetch_refspecs('origin',
+                                        ['+refs/heads/*:refs/remotes/origin/*'])
+        p_git.fetch_remote('origin')
+
+        for refname in p_git.iterrefnames(['refs/heads']):
+            if refname == 'refs/heads/master':
+                remote_refname = p_git.get_remote_fetch_refname(refname, 'origin')
+                p_git.set_branch_upstream(refname, remote_refname)
+            else:
+                p_git.delete_branch(refname)
+
+    def _setup_master_worktree(self,
+                               p_git,
+                               p_gitproject,
+                               p_project,
+                               path,
+                               clargs):
+        """Create a master woorktree for a newly-created worktree layout."""
+        # Set up a master worktree.
+        master_path = path / 'master'
+        setattr(clargs, 'committish', 'master')
+        setattr(clargs, 'path', str(master_path))
+
+        command_worktree_add(p_git, p_gitproject, p_project, clargs)
+
     def modify_arguments(self, git, gitproject, project, parser_manager, plugin_manager):
         """Modify arguments for 'git-project worktree.'"""
 
-        # If a clone is done, set up a master worktree unless told not to.
+        # If a clone is done, set up a master worktree if told to.
         clone_parser = parser_manager.find_parser('clone')
         if clone_parser:
             command_clone = clone_parser.get_default('func')
@@ -400,36 +438,89 @@ class WorktreePlugin(Plugin):
                     # Bare clone to the hidden .git directory.
                     path = command_clone(p_git, p_gitproject, p_project, clargs)
 
-                    # Detach HEAD so we can worktree master.
-                    p_git.detach_head()
-
                     # If the user did not ask for a bare repo, rewrite refspecs,
                     # fetch remote refs and rewrite existing refs (just master)
                     # to track the remote ref.  Delete other "local" branches.
                     if not bare_specified:
-                        p_git.set_remote_fetch_refspecs('origin',
-                                                        ['+refs/heads/*:refs/remotes/origin/*'])
-                        p_git.fetch_remote('origin')
+                        self._rewrite_bare_refspects(p_git)
 
-                        for refname in p_git.iterrefnames(['refs/heads']):
-                            if refname == 'refs/heads/master':
-                                remote_refname = p_git.get_remote_fetch_refname(refname, 'origin')
-                                p_git.set_branch_upstream(refname, remote_refname)
-                            else:
-                                p_git.delete_branch(refname)
+                    # Detach HEAD so we can worktree master.
+                    p_git.detach_head()
 
-                    # Set up a master worktree.
-                    master_path = Path(path).parent / 'master'
-                    setattr(clargs, 'committish', 'master')
-                    setattr(clargs, 'path', str(master_path))
-
-                    command_worktree_add(p_git, p_gitproject, p_project, clargs)
+                    self._setup_master_worktree(p_git,
+                                                p_gitproject,
+                                                p_project,
+                                                Path(path).parent,
+                                                clargs)
                 else:
                     path = command_clone(p_git, p_gitproject, p_project, clargs)
 
                 return path
 
             clone_parser.set_defaults(func=worktree_command_clone)
+
+        # If an init is done, set up a master worktree layout if told to.
+        init_parser = parser_manager.find_parser('init')
+        if init_parser:
+            command_init = init_parser.get_default('func')
+
+            def worktree_command_init(p_git, p_gitproject, p_project, clargs):
+                path = command_init(p_git, p_gitproject, p_project, clargs)
+
+                if clargs.worktree:
+                    was_bare = p_git.is_bare_repository()
+
+                    # If it's not already, convert the current workarea to a bare repository.
+                    if not p_git.is_bare_repository():
+                        if not p_git.workarea_is_clean():
+                            raise GitProjectException('Cannot initialize worktree layout, working copy not clean')
+
+                        gitdir = Path(p_git.get_gitdir())
+                        workarea_root = Path(p_git.get_working_copy_root())
+                        assert workarea_root.exists()
+
+                        if gitdir != workarea_root / '.git':
+                            raise GitProjectException('Not creating worktree layout -- are you in a worktree?')
+
+                        # Set bare and detach before removing files so they
+                        # don't come back.  If we detach later, files will be
+                        # checkout out.
+                        p_git.config.set_item('core', 'bare', 'true')
+                        p_git.detach_head()
+
+                        # Remove everything except .git.
+                        for filename in os.listdir(workarea_root):
+                            if filename == '.git':
+                                continue
+                            path = workarea_root / filename
+                            if os.path.isfile(path) or os.path.islink(path):
+                                os.unlink(path)
+                                assert not os.path.exists(path)
+                            elif os.path.isdir(path):
+                                shutil.rmtree(path)
+                                assert not os.path.exists(path)
+
+                    if was_bare:
+                        workarea_root = Path(p_git.get_gitdir()).parent
+
+                        # Note that since this is a bare repository, we may have
+                        # branches besides master that are not pushed to
+                        # whatever remote they should go to.  In general we
+                        # cannot know which branches should go where so just
+                        # punt and tell the user to clean them up.
+                        for refname in p_git.iterrefnames(['refs/heads']):
+                            if refname != 'refs/heads/master':
+                                raise GitProjectException('Non-master branches detected, please push and/or delete them and try again.')
+
+                        self._rewrite_bare_refspects(p_git)
+
+                    self._setup_master_worktree(p_git,
+                                                p_gitproject,
+                                                p_project,
+                                                workarea_root,
+                                                clargs)
+
+            init_parser.set_defaults(func=worktree_command_init)
 
     def iterclasses(self):
         """Iterate over public classes for git-project worktree."""
