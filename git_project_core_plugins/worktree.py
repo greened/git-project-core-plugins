@@ -267,7 +267,7 @@ class Worktree(ScopedConfigObject):
         except:
             pass
 
-        self._git.prune_worktree(self.name)
+        self._git.prune_worktree(self.get_ident())
 
         project = Project.get(self._git, self._project_section)
         project.prune_branch(self.committish)
