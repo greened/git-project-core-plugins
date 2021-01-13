@@ -270,7 +270,14 @@ class Worktree(ScopedConfigObject):
         self._git.prune_worktree(self.get_ident())
 
         project = Project.get(self._git, self._project_section)
-        project.prune_branch(self.committish)
+
+        for branch in project.iterbranches():
+            branch_name = self._git.committish_to_refname(branch)
+            committish_name = self._git.committish_to_refname(self.committish)
+            if branch_name == committish_name:
+                break
+        else:
+            project.prune_branch(self.committish)
 
         self._pathsection.rm()
         super().rm()
