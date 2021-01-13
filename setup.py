@@ -54,6 +54,7 @@ setup(name='git_project_core_plugins',
               'clone = git_project_core_plugins.clone:ClonePlugin',
               'config = git_project_core_plugins.config:ConfigPlugin',
               'help = git_project_core_plugins.help:HelpPlugin',
+              'init = git_project_core_plugins.init:InitPlugin',
               'worktree = git_project_core_plugins.worktree:WorktreePlugin',
           }
       },

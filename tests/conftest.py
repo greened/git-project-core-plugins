@@ -35,6 +35,7 @@ from git_project.test_support import gitproject
 from git_project.test_support import project
 
 from git_project_core_plugins import ClonePlugin
+from git_project_core_plugins import InitPlugin
 from git_project_core_plugins import WorktreePlugin
 
 @pytest.fixture(scope="function")
@@ -56,6 +57,17 @@ def clone_parser_manager(request,
                          parser_manager,
                          plugin_manager):
     plugin = ClonePlugin()
+    plugin.add_arguments(git, gitproject, project, parser_manager, plugin_manager)
+    return parser_manager
+
+@pytest.fixture(scope="function")
+def init_parser_manager(request,
+                        git,
+                        gitproject,
+                        project,
+                        parser_manager,
+                        plugin_manager):
+    plugin = InitPlugin()
     plugin.add_arguments(git, gitproject, project, parser_manager, plugin_manager)
     return parser_manager
 
