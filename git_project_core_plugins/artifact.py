@@ -161,8 +161,95 @@ def command_artifact_rm(git, gitproject, project, clargs):
         artifact.rm_items('path')
 
 class ArtifactPlugin(Plugin):
-    def __init__(self):
-        super().__init__('artifact')
+    """
+    The artifact command adds or removes associations between git config objects
+    and file-system objects.
+
+    Summary:
+
+      git <project> artifact add <subsection> <path>
+      git <project> artifact rm <subsection> [<path>]
+
+    <subsection> is a git config section which will appear under the
+    <project>.artifact section.  Artifacts look up objects associated with
+    <subsection> and perform substitutions on paths to yield the final
+    associated file-system object.  The ``artifact rm'' command simply removes
+    an artifact association, it does not remove the artifact itself.  Multiple
+    artifact paths may be associated under a single <subsection> and the option
+    <path> argument to ``artifact rm'' allows us to remove a single association
+    rather than all of them at once.
+
+    For example:
+
+      git <project> artifact add worktree.myworktree /path/to/artifact
+
+    Presumably, /path/to/artifact is in some way created in association with
+    myworktree, for example by the ``run'' command.  When we delete myworktree,
+    the artifact association causes /path/to/artifact to also be removed.
+    Substitutions can make artifact associations easier to manage:
+
+      git <project> artifact add worktree /path/to/{worktree}/artifact
+
+    Notice that we've added the artifact under the more general ``worktree''
+    subsection instead of naming a worktree explicitly as before.  Because the
+    {worktree} substitution appears in the artifact path, deleting any worktree
+    will cause the worktree's name to be substituted into the artifact path,
+    forming a unique artifact path to remove.
+
+    We may make this even more general:
+
+      git <project> config srcdir "{path}"
+      git <project> config builddir "{srcdir}/build/{worktree}"
+      git <project> config make "make -C {srcdir} BUILDDIR={builddir} {build}"
+      git <project> run --make-alias build
+      git <project> add build debug "{make}"
+      git <project> add build release "{make}"
+      git <project> add build check "{make}"
+      git <project> artifact add worktree "{builddir}"
+
+    We've added a single artifact association that will handle any worktree and
+    all of our different build types.  When we delete the worktree, all
+    artifacts related to debug, release and check builds will also be removed.
+
+    The worktree plugin also modifies the clone and init commands, adding a
+    --worktree option to both.  With --worktree, clone will create a ``worktree
+    layout'' as so:
+
+      clonedir
+        .git
+         master
+
+    Here, ``master'' is a worktree created from the master branch.  ``clonedir''
+    becames a bare repository, though with refspecs that make it operate like a
+    regular clone for fetch and push operations.  That is, the cloned repository
+    will still have refs/heads and refs/remotes namespaces.
+
+    With --worktree, init will take an existing local clone and convert it to a
+    bare repository, removing all checked out files and creating a master
+    worktree:
+
+      clonedir
+        .git
+         master
+
+    Conversion will abort if the workarea is not in a clean state.  Note that
+    all files in clonedir will be deleted so if there are important files not
+    part of the underlying repository, the user must take care to preserve them.
+    If the workarea hd a branch other than master checked out, no worktree for
+    it will be created automatically, though the user may easily create one
+    after conversion.
+
+    See also:
+
+      clone
+      config
+      init
+      run
+      worktree
+
+    """
+
+    def __init__(self): super().__init__('artifact')
 
     def add_arguments(self,
                       git,
@@ -171,6 +258,7 @@ class ArtifactPlugin(Plugin):
                       parser_manager,
                       plugin_manager):
         """Add arguments for 'git-project artifact.'"""
+
         artifact_parser = add_top_level_command(parser_manager,
                                                 'artifact',
                                                 'artifact',

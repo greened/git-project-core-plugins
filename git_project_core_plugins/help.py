@@ -44,20 +44,21 @@ encoded with the branch name.  Or users may want to create worktrees associated
 with build and install directories, so that removing a worktree also removes the
 associated build and install directories.
 
-git-project may be invoked via 'git project <command> [options...]' or, by
-linking the git-project command to another command named 'git-<name>' it may be
-invoked via `git <name> <command>.'  For example, linking 'git-project' to
-'git-fizzinb' we may invoke commands via 'git fizzbin <command>' and all
-configuration will; appear under a "fizzbin" config section.  Thus, a single
+git-project may be invoked via ``git project <command> [options...]'' or, by
+linking the git-project command to another command named ``git-<name>'' it may
+be invoked via ``git <name> <command>.''  For example, linking ``git-project''
+to ``git-fizzbin'' we may invoke commands via ``git fizzbin <command>'' and all
+configuration will appear under a ``fizzbin'' config section.  Thus, a single
 repository may support multiple projects, each with a unique name.  To emphasize
-this, we will show invocations of git-project as `git <project> [options...].'
+this, we will show invocations of git-project as ``git <project> [options...].''
 
 Plugins extend git-project with new functionality.  Each plugin should include
 extensive documentation accessible though --help flags or via help command
 options.
 
-To see help for a specific command, try `git <project> help [command] [options...]
- """)
+To see help for a specific command, try ``git <project> help [command]
+ [options...].''
+""")
 
 class Help(ConfigObject):
     @staticmethod
@@ -176,6 +177,40 @@ def command_rm_help(git, gitproject, project, clargs):
         git.config.rm_items(help_section, 'short')
 
 class HelpPlugin(Plugin):
+    """
+    The help command displays tutorial-style help for commands.
+
+    Summary:
+
+      git <project> add help [--manpage] <subsection> <text>
+      git <project> help <command>
+
+    Users may add help to any project config section.  For example:
+
+      git <project> add help run.build "Perform a build"
+      git <project> add help run.check "Run tests"
+
+    All help is stored under a <project>.help config sub-section.  If a command
+    supports it, such help may appear in the command's own help output by
+    querying the appropriate <project>.help sub-section:
+
+      git <project> run --help
+
+      <standard help text>
+
+      build     -- Perform a build
+      check     -- Run tests
+
+    In this way projects can self-document their configurations.  Normally
+    <text> is stored in <project>.help.<subsection>.short.  With --manpage,
+    <text> is stored in <project>.help.<subsection>.manpage.  Commands may
+    reference short help or manpages in various ways to present help.
+
+    See also:
+
+      run
+
+    """
     def __init__(self):
         super().__init__('help')
 

@@ -86,8 +86,69 @@ class RunConfig(ConfigObject):
                            **kwargs)
 
 class RunPlugin(Plugin):
-    """A plugin to add the run command to git-project"""
+    """
+    The run command executes commands via a shell.
 
+    Summary:
+
+      git <project> add run <name> <command>
+      git <project> run --make-alias <name>
+      git <project> run <name>
+
+    Full shell substitution is supported, as well as config {key} substitution,
+    where the text ``{key}'' is replaced by key's value.
+
+    The add run command associates a command string with a name.  The run
+    command itself invokes the command string via a shell.  With --make-alias,
+    the run comand instead registers an alternative name for ``run.''  For
+    example:
+
+      git <project> run --make-alias build
+      git <project> add build all "make -C {path} all"
+      git <project> build all
+
+    Note that an alias will prevent ``run'' from invoking the command so in the
+    above example we could not invoke the build as such:
+
+      git <project> run all
+
+    In this way we may use the same <name> for different registered run aliases,
+    which can be convenient:
+
+      git <project> build all
+      git <project> check all
+
+    In general any project config {key} will be replaced with its value before
+    the command is executed.  Substitution occurs recursively, so if a {key}
+    value itself contains a substitution string, it will be replaced as well.
+    There are a few special case substitutions.  The {path} key will be replaced
+    by the absolute path to the root of the current workarea.  The {branch} key
+    will be replaced by the currently-active branch nme.  In addition the {run}
+    (or {build}, etc. aliases) will be replaced by their names.  Again, an
+    example will make this more clear:
+
+      git <project> config cmd "make -C {path} BLDDIR=/path/to/{build} {build}"
+      git project add build all "{cmd}"
+      git project add build some "{cmd}"
+
+    We have configured two different build flavors, each which place build
+    results in separate directories and invoke different targets.  Substitution
+    proceeds as follows:
+
+      git project build all -> make -C /cur/workarea BLDDIR=/path/to/all all
+      git project build some -> make -C /cur/workarea BLDDIR=/path/to/some some
+
+    Some plugins may add scoping rules to the project config, such that a scope
+    nested inside the project may override the global project config key value.
+    For example the worktree plugin adds a ``worktree'' scope.  The worktree may
+    contain key values that override similar keys in the project config.
+
+    See also:
+
+      config
+      worktree
+
+    """
     def __init__(self):
         super().__init__('run')
         self.classes = dict()
