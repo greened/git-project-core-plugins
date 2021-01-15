@@ -36,7 +36,23 @@ def command_init(git, gitproject, project, clargs):
     pass
 
 class InitPlugin(Plugin):
-    """A plugin to add the init command to git-project."""
+    """
+    The init command initializes project state.
+
+    Summary:
+
+      git <project> init
+
+    Basic config entries are added to name the project and default branches.
+    Plugins may add options to enhance functionality.  For example the worktree
+    command adds a --worktree option to convert an existing local clone to a
+    ``worktree layout.''
+
+    See also:
+
+      worktree
+
+    """
     def __init__(self):
         super().__init__('init')
 

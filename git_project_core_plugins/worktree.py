@@ -16,16 +16,6 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-"""A plugin to add a 'worktree' command to git-project.  The worktree command
-manages worktrees and connects them to projects.
-
-Summary:
-
-git-project worktree add <name-or-path> [<committish>]
-git-project worktree rm <name-or-path>
-
-"""
-
 from git_project import ConfigObject, Git, Plugin, Project
 from git_project import ScopedConfigObject
 from git_project import add_top_level_command, GitProjectException
@@ -283,7 +273,80 @@ class Worktree(ScopedConfigObject):
         super().rm()
 
 class WorktreePlugin(Plugin):
-    """A plugin to provide the git-project worktree command."""
+    """
+    The worktree command manages worktrees and connects them to projects.
+
+    Summary:
+
+      git <project> worktree add [-b <branch>] <name-or-path> [<committish>]
+      git <project> worktree rm <name-or-path>
+      git <project> worktree config <key> [<value>]
+      git <project> worktree config [--unset] <key> [<value>]
+
+    ``worktree add'' creates a new git worktree named via <name-or-path> with
+    <committish> checked out.  If we pass -b <branch> we'll get a new branch at
+    HEAD or <committish> if it is given.  The worktree name is either the given
+    name or if name-or-path is a path, the worktree name will be the same as the
+    last path component.  If <name-or-path> is a simple name with no directory
+    separators, the worktree will be created as a sub-directory of the current
+    directory.
+
+    To keep things simple, we'll usually always name worktrees similarly (or
+    identically) to the branches they reference, though it is not strictly
+    necessary to do so.
+
+    The key idea behind project worktrees is that they are connected to various
+    ``artifacts.''  Worktrees are managed together with this artifacts to
+    provide a project-level view of various tasks.  For example, a ``run''
+    command can create artifacts associated with a worktree.  Removing the
+    worktree implicitly removes thee artifacts, making build cleanups easy and
+    convenient.  Commands may use the {worktree} substitution to create
+    worktree-unique artifacts.  Other substitutions may also referece {worktree}
+    in a recursive manner.
+
+    Here is a concrete example:
+
+      git <project> config srcdir "{path}"
+      git <project> config builddir "{srcdir}/build/{worktree}"
+      git <project> config make "make -C {srcdir} BUILDDIR={builddir} {build}"
+      git <project> run --make-alias build
+      git <project> add build release "{make}"
+
+    Assuming the build system uses BUILDDIR to determine where build artifacts
+    go, each worktree will get a unique set of build artifacts, via the
+    {builddir} and, recursively., {worktree} substitutions.  When we delete the
+    worktree, we'll also delete the associoated build directory.
+
+    We associate artifacts with worktrees via the artifact commands.
+
+    Another important benefit of worktrees and associated builds is that
+    switching to work on a new worktree (by simply editing sources in a
+    different worktree directory) will not result in build artifacts from thte
+    previous worktree being overwritten.  Thus we avoid the ``rebuild the
+    world'' problems of switching branches within the same workarea.  Generally,
+    each created branch will have its own worktree and we will rarely, if ever,
+    switch branches within a worktree.
+
+    A worktree layers a config scope on top of the global project scope, so that
+    configuring a key in the worktree with the same name as a key in the project
+    will cause the worktree key's value to override the project key's value:
+
+      git <project> config buildwidth 16
+      git <project> worktree config buildwidth 32
+
+    If we are in a worktree configured with buildwidth=32, then wherever
+    {buildwidth} apeears (say, in a run command), the value 32 will be
+    substituted instead of 16.  If we are outside the worktree (for example a
+    worktree without a buildwidth configured), then {buildwidth} will be
+    substituted with 16.
+
+    See also:
+
+      artifact
+      config
+      run
+
+    """
 
     def __init__(self):
         super().__init__('worktree')

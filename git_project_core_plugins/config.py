@@ -67,6 +67,46 @@ def command_config(git, gitproject, project, clargs):
         print(value)
 
 class ConfigPlugin(Plugin):
+    """
+    The config command manages git config settings under the <project> section.
+
+    Summary:
+
+      git <project> config [--add] [--unset] <name> [<value>]
+
+    The config command operates much like git's built-in config command, except
+    all configuration keys are prefixed with <project>, keeping values under a
+    single project namespace.  This is a convenient way to store parameters for
+    other commands.  For example:
+
+      git <project> config builddir /path/to/build
+      git <project> add run build "make BUILDDIR={builddir} all"
+
+    Configuration kays may have their values substituted into other
+    configuration values via the {key} specifier.  Special commands like build
+    perform the substitution recursively, so configuration vaalues may contain
+    substitutions of other configuration values which themselves contain
+    substitutions, and so on.  Importantly, substitution only happens when
+    commands are run.  Commands should document whether or not they perform
+    substitutions.
+
+    A git config ``sub-section'' may be substituted with its identifier.  For
+    example:
+
+      git <project> worktree add myworktree
+      git <project> config builddir /path/to/{worktree}/build
+
+    Here, myworktree is the identifier of a specific worktree sub-section.  If
+    myworktree is the currently active worktree (that is, the current directory
+    is under the myworktree root), then ``myworktree'' will substitute for
+    {woktree}.
+
+    See also:
+
+      run
+      worktree
+
+    """
     def __init__(self):
         super().__init__('config')
 

@@ -138,7 +138,41 @@ def command_branch_prune(git, gitproject, project, clargs):
                 project.prune_branch(branch)
 
 class BranchPlugin(Plugin):
-    """A plugin to add the branch command to git-project."""
+    """
+    The branch command queries the status of branches against known project
+    branches and provides methods to prune old branches.
+
+    Summary:
+
+      git <project> branch status [--all] [<refish>]
+      git <project> branch prune [--force] [--no-ask]
+
+    The branch status command checks the given <refish> (or all local branches
+    with the --all option) against the project-configured branches.  The command
+    outputs a table of branches and whether they are merged to a project branch
+    and/or pushed to a remote.  For example:
+
+      git <project> config --add branch release
+      git <project> branch status mybranch
+
+    The report will show whether mybranch is merged to the release or master
+    branches (master is always a configured project branch) and whether the
+    commit pointed to mybranch is pushed to a remote.
+
+    The branch prune command computes the same information and if the branch is
+    merged to a project branch and that project branch is pushed to a remote,
+    will ask whether mybranch should be deleted.  If the user indicates yes,
+    both the local mybranch and its remote counterpart, if any, will be deleted.
+
+    With --force, branches will be pruneed regardless of merge/push status.
+    With --no-ask branch prune operates in batch mode, assuming all merged and
+    pushed branches should be pruned.
+
+    See also:
+
+      config
+
+    """
     def __init__(self):
         super().__init__('branch')
 
