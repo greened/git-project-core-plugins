@@ -41,7 +41,7 @@ setup(name='git_project_core_plugins',
       license='GPLv3+',
       packages=['git_project_core_plugins'],
       install_requires = [
-          'git_project>=0.0.12',
+          'git_project>=0.0.13',
           'progressbar2',
           'pygit2',
       ],
