@@ -445,9 +445,37 @@ class WorktreePlugin(Plugin):
             init_parser.add_argument('--worktree', action='store_true',
                                      help='Create a layout convenient for worktree use')
 
+    def _choose_main_branch(self, git):
+        """Return the refname of the main branch.  Ask the user if we cannot determine a
+        unique main branch.
+
+        """
+        main = ''
+        nonmain_branches = []
+        for refname in git.iterrefnames(['refs/heads']):
+            if refname == 'refs/heads/master':
+                if not main:
+                    main = refname
+            if refname == 'refs/heads/main':
+                main = refname
+            else:
+                nonmain_branches.append(refname)
+
+        if not main:
+            if len(nonmain_branches) == 1:
+                main = nonmain_branches[0]
+            else:
+                while True:
+                    for refname in nonmain_branches:
+                        print(git.refname_to_branch_name(refname))
+                    main = input('No unique main branch found, enter branch to use as main: ')
+                    if git.branch_name_to_refname(main) in nonmain_branches:
+                        break
+        return git.branch_name_to_refname(main)
+
     def _rewrite_bare_refspects(self, p_git):
         """Modify refspects to convert from a bare repository so that we merge origin
-        branches to local branches.
+        branches to local branches.  Return he refname of the main branch.
 
         """
         assert p_git.is_bare_repository()
@@ -456,31 +484,38 @@ class WorktreePlugin(Plugin):
                                         ['+refs/heads/*:refs/remotes/origin/*'])
         p_git.fetch_remote('origin')
 
+        main = self._choose_main_branch(p_git)
+
         for refname in p_git.iterrefnames(['refs/heads']):
-            if refname == 'refs/heads/master':
+            if refname == main:
                 remote_refname = p_git.get_remote_fetch_refname(refname, 'origin')
                 p_git.set_branch_upstream(refname, remote_refname)
             else:
                 p_git.delete_branch(refname)
 
-    def _setup_master_worktree(self,
-                               p_git,
-                               p_gitproject,
-                               p_project,
-                               path,
-                               clargs):
-        """Create a master woorktree for a newly-created worktree layout."""
-        # Set up a master worktree.
-        master_path = path / 'master'
-        setattr(clargs, 'committish', 'master')
-        setattr(clargs, 'path', str(master_path))
+        return main
+
+    def _setup_main_worktree(self,
+                             main,
+                             p_git,
+                             p_gitproject,
+                             p_project,
+                             path,
+                             clargs):
+        """Create a main woorktree for a newly-created worktree layout."""
+        # Set up a main worktree.
+        main_branch = p_git.refname_to_branch_name(main)
+
+        main_path = path / main_branch
+        setattr(clargs, 'committish', main_branch)
+        setattr(clargs, 'path', str(main_path))
 
         command_worktree_add(p_git, p_gitproject, p_project, clargs)
 
     def modify_arguments(self, git, gitproject, project, parser_manager, plugin_manager):
         """Modify arguments for 'git-project worktree.'"""
 
-        # If a clone is done, set up a master worktree if told to.
+        # If a clone is done, set up a main worktree if told to.
         clone_parser = parser_manager.find_parser('clone')
         if clone_parser:
             command_clone = clone_parser.get_default('func')
@@ -502,19 +537,24 @@ class WorktreePlugin(Plugin):
                     path = command_clone(p_git, p_gitproject, p_project, clargs)
 
                     # If the user did not ask for a bare repo, rewrite refspecs,
-                    # fetch remote refs and rewrite existing refs (just master)
+                    # fetch remote refs and rewrite existing refs (just main)
                     # to track the remote ref.  Delete other "local" branches.
+                    main = ''
                     if not bare_specified:
-                        self._rewrite_bare_refspects(p_git)
+                        main = self._rewrite_bare_refspects(p_git)
 
-                    # Detach HEAD so we can worktree master.
+                    if not main:
+                        main = self._choose_main_branch(p_git)
+
+                    # Detach HEAD so we can worktree main.
                     p_git.detach_head()
 
-                    self._setup_master_worktree(p_git,
-                                                p_gitproject,
-                                                p_project,
-                                                Path(path).parent,
-                                                clargs)
+                    self._setup_main_worktree(main,
+                                              p_git,
+                                              p_gitproject,
+                                              p_project,
+                                              Path(path).parent,
+                                              clargs)
                 else:
                     path = command_clone(p_git, p_gitproject, p_project, clargs)
 
@@ -522,7 +562,7 @@ class WorktreePlugin(Plugin):
 
             clone_parser.set_defaults(func=worktree_command_clone)
 
-        # If an init is done, set up a master worktree layout if told to.
+        # If an init is done, set up a main worktree layout if told to.
         init_parser = parser_manager.find_parser('init')
         if init_parser:
             command_init = init_parser.get_default('func')
@@ -531,6 +571,7 @@ class WorktreePlugin(Plugin):
                 path = command_init(p_git, p_gitproject, p_project, clargs)
 
                 if clargs.worktree:
+                    main = self._choose_main_branch(p_git)
                     was_bare = p_git.is_bare_repository()
 
                     # If it's not already, convert the current workarea to a bare repository.
@@ -567,21 +608,23 @@ class WorktreePlugin(Plugin):
                         workarea_root = Path(p_git.get_gitdir()).parent
 
                         # Note that since this is a bare repository, we may have
-                        # branches besides master that are not pushed to
+                        # branches besides main that are not pushed to
                         # whatever remote they should go to.  In general we
                         # cannot know which branches should go where so just
                         # punt and tell the user to clean them up.
                         for refname in p_git.iterrefnames(['refs/heads']):
-                            if refname != 'refs/heads/master':
-                                raise GitProjectException('Non-master branches detected, please push and/or delete them and try again.')
+                            if refname != main:
+                                raise GitProjectException('Non-main branches detected, please push and/or delete them and try again.')
 
-                        self._rewrite_bare_refspects(p_git)
+                        newmain = self._rewrite_bare_refspects(p_git)
+                        assert newmain == main
 
-                    self._setup_master_worktree(p_git,
-                                                p_gitproject,
-                                                p_project,
-                                                workarea_root,
-                                                clargs)
+                    self._setup_main_worktree(main,
+                                              p_git,
+                                              p_gitproject,
+                                              p_project,
+                                              workarea_root,
+                                              clargs)
 
             init_parser.set_defaults(func=worktree_command_init)
 
