@@ -20,6 +20,7 @@ import git_project
 from git_project_core_plugins import Worktree, WorktreePlugin
 import common
 
+import io
 import os
 from pathlib import Path
 
@@ -265,3 +266,148 @@ def test_worktree_init_nonclean(git,
                            '',
                            'init',
                            '--worktree')
+
+def test_worktree_init_main(git,
+                            git_project_runner,
+                            tmp_path_factory):
+    path = tmp_path_factory.mktemp('clone-workdir')
+
+    os.chdir(path)
+
+    clone_path = git.clone('file://' + git.get_gitdir())
+
+    os.chdir(clone_path)
+    git = git_project.Git()
+
+    workarea = git.get_working_copy_root()
+
+    print(f'Workarea: {workarea}')
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git.create_branch('main', 'master')
+    git.checkout('main')
+    git.delete_branch('master')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'init',
+                           '--worktree')
+
+    assert os.path.exists(workarea / '.git')
+    assert not os.path.exists(workarea / 'MergedRemote.txt')
+    assert os.path.exists(workarea / 'main')
+
+def test_worktree_init_main_master(git,
+                                   git_project_runner,
+                                   tmp_path_factory):
+    path = tmp_path_factory.mktemp('clone-workdir')
+
+    os.chdir(path)
+
+    clone_path = git.clone('file://' + git.get_gitdir())
+
+    os.chdir(clone_path)
+    git = git_project.Git()
+
+    workarea = git.get_working_copy_root()
+
+    print(f'Workarea: {workarea}')
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git.create_branch('main', 'master')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'init',
+                           '--worktree')
+
+    assert os.path.exists(workarea / '.git')
+    assert not os.path.exists(workarea / 'MergedRemote.txt')
+    # Prefer main over master.
+    assert not os.path.exists(workarea / 'master')
+    assert os.path.exists(workarea / 'main')
+
+def test_worktree_init_nomain(git,
+                              git_project_runner,
+                              tmp_path_factory):
+    path = tmp_path_factory.mktemp('clone-workdir')
+
+    os.chdir(path)
+
+    clone_path = git.clone('file://' + git.get_gitdir())
+
+    os.chdir(clone_path)
+    git = git_project.Git()
+
+    workarea = git.get_working_copy_root()
+
+    print(f'Workarea: {workarea}')
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git.create_branch('newmain', 'master')
+    git.checkout('newmain')
+    git.delete_branch('master')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'init',
+                           '--worktree')
+
+    assert os.path.exists(workarea / '.git')
+    assert not os.path.exists(workarea / 'MergedRemote.txt')
+    assert not os.path.exists(workarea / 'master')
+    assert os.path.exists(workarea / 'newmain')
+
+def test_worktree_init_nomain_multi(git,
+                                    git_project_runner,
+                                    tmp_path_factory):
+    path = tmp_path_factory.mktemp('clone-workdir')
+
+    os.chdir(path)
+
+    clone_path = git.clone('file://' + git.get_gitdir())
+
+    os.chdir(clone_path)
+    git = git_project.Git()
+
+    workarea = git.get_working_copy_root()
+
+    print(f'Workarea: {workarea}')
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git.create_branch('newmain', 'master')
+    git.checkout('newmain')
+    git.delete_branch('master')
+    git.create_branch('other', 'newmain')
+    git.create_branch('another', 'newmain')
+    git.create_branch('yetanother', 'newmain')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'init',
+                           '--worktree',
+                           stdin=io.StringIO('newmain'))
+
+    assert os.path.exists(workarea / '.git')
+    assert not os.path.exists(workarea / 'MergedRemote.txt')
+    assert not os.path.exists(workarea / 'master')
+    assert os.path.exists(workarea / 'newmain')
+    assert not os.path.exists(workarea / 'other')
+    assert not os.path.exists(workarea / 'another')
+    assert not os.path.exists(workarea / 'yetanother')
