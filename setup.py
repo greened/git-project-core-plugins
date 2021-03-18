@@ -45,7 +45,7 @@ setup(name='git_project_core_plugins',
           'progressbar2',
           'pygit2',
       ],
-      python_requires='~=3.9',
+      python_requires='~=3.8',
       entry_points = {
           'git_project.plugins': {
               'artifact = git_project_core_plugins.artifact:ArtifactPlugin',
