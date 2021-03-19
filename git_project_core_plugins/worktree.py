@@ -450,27 +450,18 @@ class WorktreePlugin(Plugin):
         unique main branch.
 
         """
-        main = ''
-        nonmain_branches = []
-        for refname in git.iterrefnames(['refs/heads']):
-            if refname == 'refs/heads/master':
-                if not main:
-                    main = refname
-            if refname == 'refs/heads/main':
-                main = refname
-            else:
-                nonmain_branches.append(refname)
+        main = git.get_main_branch()
+        if main:
+            return git.branch_name_to_refname(main)
 
-        if not main:
-            if len(nonmain_branches) == 1:
-                main = nonmain_branches[0]
-            else:
-                while True:
-                    for refname in nonmain_branches:
-                        print(git.refname_to_branch_name(refname))
-                    main = input('No unique main branch found, enter branch to use as main: ')
-                    if git.branch_name_to_refname(main) in nonmain_branches:
-                        break
+        branches = [branch for branch in git.iterrefnames(['refs/heads'])]
+        while True:
+            for refname in branches:
+                print(git.refname_to_branch_name(refname))
+            main = input('No unique main branch found, enter branch to use as main: ')
+            if git.branch_name_to_refname(main) in branches:
+                break
+
         return git.branch_name_to_refname(main)
 
     def _rewrite_bare_refspects(self, p_git):
