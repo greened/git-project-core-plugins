@@ -411,3 +411,47 @@ def test_worktree_init_nomain_multi(git,
     assert not os.path.exists(workarea / 'other')
     assert not os.path.exists(workarea / 'another')
     assert not os.path.exists(workarea / 'yetanother')
+
+def test_worktree_add(git,
+                      git_project_runner,
+                      tmp_path_factory):
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           '../test',
+                           'master')
+
+    assert os.path.exists(workarea.parent / 'test')
+    assert git.branch_name_to_refname('test') == 'refs/heads/test'
+
+def test_worktree_add_subdir(git,
+                             git_project_runner,
+                             tmp_path_factory):
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           '../user/test',
+                           'master')
+
+    assert os.path.exists(workarea.parent / 'user' / 'test')
+    assert git.branch_name_to_refname('user/test') == 'refs/heads/user/test'
