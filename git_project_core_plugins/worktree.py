@@ -55,26 +55,43 @@ def normalize_path(git, path):
     return str(path)
 
 # Determine a path and committish from args.
-def get_name_path_and_refname(git, gp, clargs):
+def get_name_branch_path_and_refname(git, gp, clargs):
     """Given a Project and worktree command-line arguments <name-or-path> and
-    <committish>, determine an appropriate worktree name, a path based on the
-    name and refname based on the name.  If one or the other of <name-or-path>
-    or <committish> is not provided, figure it out from the provided value.  If
-    neither <name-or-path> nor <committish> is provided, raise an exception.
+    <committish>, determine an appropriate worktree name, a branch for the
+    worktree, a path based on the name and refname based on the name.  If one or
+    the other of <name-or-path> or <committish> is not provided, figure it out
+    from the provided value.  If neither <name-or-path> nor <committish> is
+    provided, raise an exception.
 
     """
     name = str(Path(clargs.path).name)
+    branch = name
+    # If the path is not absolute, try creating a branch named as a subpath,
+    # starting either from the top or after the last .. component.
+    namepath = Path(clargs.path)
+    if not namepath.is_absolute():
+        parts = namepath.parts
+        for i, v in enumerate(reversed(parts)):
+            if v == '..':
+                oi = len(parts) - i - 1
+                namepath = Path(parts[oi+1])
+                for i in range(oi+2, len(parts)):
+                    namepath = namepath.joinpath(parts[i])
+                break
+        branch = str(namepath)
     path = normalize_path(git, clargs.path)
     refname = git.committish_to_refname('HEAD')
     if hasattr(clargs, 'committish') and clargs.committish:
         refname = git.committish_to_refname(clargs.committish)
 
-    return name, path, refname
+    return name, branch, path, refname
 
 # worktree add
 def command_worktree_add(git, gitproject, project, clargs):
     """Implement git-project worktree add."""
-    name, path, refname = get_name_path_and_refname(git, gitproject, clargs)
+    name, newbranch, path, refname = get_name_branch_path_and_refname(git,
+                                                                      gitproject,
+                                                                      clargs)
 
     branch = git.refname_to_branch_name(refname)
     branch_point = refname
@@ -87,9 +104,9 @@ def command_worktree_add(git, gitproject, project, clargs):
     if hasattr(clargs, 'branch') and clargs.branch:
         branch = clargs.branch
         git.create_branch(branch, branch_point)
-    elif name != branch:
-        branch = name
-        if not git.committish_exists(name):
+    elif newbranch != branch:
+        branch = newbranch
+        if not git.committish_exists(branch):
             git.create_branch(branch, branch_point)
 
     worktree = Worktree.get(git,

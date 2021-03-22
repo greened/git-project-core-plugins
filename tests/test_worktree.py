@@ -454,4 +454,6 @@ def test_worktree_add_subdir(git,
                            'master')
 
     assert os.path.exists(workarea.parent / 'user' / 'test')
-    assert git.branch_name_to_refname('user/test') == 'refs/heads/user/test'
+    os.chdir(workarea.parent / 'user' / 'test')
+    git = git_project.Git()  # Reinitialize in new workarea.
+    assert git.get_current_branch() == 'user/test'
