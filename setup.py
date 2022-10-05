@@ -26,6 +26,7 @@ setup(name='git_project_core_plugins',
       version='0.0.18',
       description='Core functionality for git-project',
       long_description=readme(),
+      long_description_content_type='text/x-rst',
       classifiers=[
           'Development Status :: 3 - Alpha',
           'Environment :: Console',
