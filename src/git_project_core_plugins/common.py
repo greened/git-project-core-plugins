@@ -20,21 +20,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-from git_project_core_plugins import Worktree
+from git_project.commandline import add_version_argument
 
-from io import StringIO
-
-class AttrDict(dict):
-    """Turn a dictionary into an object with attributes."""
-    def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
-        self.__dict__ = self
-
-def check_args(actual_parser, expected):
-    with StringIO() as buf:
-        buf = StringIO()
-
-        actual_parser.parser.print_usage(buf)
-
-        for name in expected:
-            assert name in buf.getvalue()
+def add_plugin_version_argument(parser):
+    add_version_argument(parser, 'git-project-core-plugins')
