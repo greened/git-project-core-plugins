@@ -20,6 +20,8 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
+from pathlib import Path
+
 from git_project_core_plugins import BranchPlugin
 import common
 
@@ -105,6 +107,8 @@ refs/heads/merged_local                      yes     no
 refs/heads/merged_remote                     yes     yes     
 refs/heads/notpushed                         no      no      
 refs/heads/pushed                            no      yes     
+refs/heads/pushed_indirectly                 yes     yes     
+refs/heads/pushed_remote_only                yes     yes     
 refs/heads/unmerged                          no      no      
 -----------------------------------------------------------
 """
