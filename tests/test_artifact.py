@@ -229,7 +229,7 @@ def test_artifact_rm_substitution(git_project_runner,
                            'artifact',
                            'add',
                            'myconfigobject',
-                           '{path}/temp')
+                           '{git_workdir}/temp')
 
     git.reload_config()
 

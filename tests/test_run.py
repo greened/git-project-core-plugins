@@ -83,7 +83,7 @@ def test_run_add_and_run(git_project_runner,
                            'add',
                            'run',
                            'test',
-                           '{path}/doit {branch}')
+                           '{git_workdir}/doit {branch}')
 
     git_project_runner.run(re.escape(f'{workdir}/doit master'),
                            '.*',
@@ -100,7 +100,7 @@ def test_run_recursive_sub(git_project_runner,
                            '',
                            'config',
                            'rundir',
-                           '{path}/{branch}')
+                           '{git_workdir}/{branch}')
 
     git_project_runner.run('.*',
                            '',
@@ -123,7 +123,7 @@ def test_run_no_dup(reset_directory, git_project_runner, git):
                            '',
                            'config',
                            'rundir',
-                           '{path}/{branch}')
+                           '{git_workdir}/{branch}')
 
     git_project_runner.run('.*',
                            '',
@@ -193,7 +193,7 @@ def test_run_add_alias(git_project_runner,
                            'add',
                            'build',
                            'test',
-                           '{path}/buildit {branch}')
+                           '{git_workdir}/buildit {branch}')
 
     # Check build invocation.
     git_project_runner.run(re.escape(f'{workdir}/buildit master'),
@@ -231,7 +231,7 @@ def test_run_substitute_alias(git_project_runner,
                            'add',
                            'build',
                            'test',
-                           '{path}/buildit {branch} {build}')
+                           '{git_workdir}/buildit {branch} {build}')
 
     # Add a check.
     git_project_runner.run('.*',
@@ -239,7 +239,7 @@ def test_run_substitute_alias(git_project_runner,
                            'add',
                            'check',
                            'test',
-                           '{path}/checkit {build}')
+                           '{git_workdir}/checkit {build}')
 
     # Check build invocation.
     git_project_runner.run(re.escape(f'{workdir}/buildit master test'),
@@ -266,7 +266,7 @@ def test_run_substitute_options(git_project_runner,
                            'add',
                            'run',
                            'test',
-                           '{path}/buildit {options} {run}')
+                           '{git_workdir}/buildit {options} {run}')
 
     # Check run invocation.
     git_project_runner.run(re.escape(f'{workdir}/buildit master test'),
@@ -288,7 +288,7 @@ def test_run_substitute_empty_options(git_project_runner,
                            'add',
                            'run',
                            'test',
-                           '{path}/buildit {options} {run}')
+                           '{git_workdir}/buildit {options} {run}')
 
     # Check run invocation.
     git_project_runner.run(re.escape(f'{workdir}/buildit  test'),
@@ -309,15 +309,15 @@ def test_run_substitute_option_names(git_project_runner,
                            'add',
                            'run',
                            'test',
-                           '{path}/buildit {option_names} {run}')
+                           '{git_workdir}/buildit {option_names} {run}')
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit branch path test'),
+    git_project_runner.run(re.escape(f'{workdir}/buildit branch git_workdir test'),
                            '.*',
                            'run',
                            'test',
                            '{branch}',
-                           '{path}')
+                           '{git_workdir}')
 
 def test_run_substitute_empty_option_names(git_project_runner,
                                            git,
@@ -332,7 +332,7 @@ def test_run_substitute_empty_option_names(git_project_runner,
                            'add',
                            'run',
                            'test',
-                           '{path}/buildit {option_names} {run}')
+                           '{git_workdir}/buildit {option_names} {run}')
 
     # Check run invocation.
     git_project_runner.run(re.escape(f'{workdir}/buildit  test'),
@@ -353,15 +353,15 @@ def test_run_substitute_option_name_key(git_project_runner,
                            'add',
                            'run',
                            'test',
-                           '{path}/buildit{option_keysep}{option_key} {run}')
+                           '{git_workdir}/buildit{option_keysep}{option_key} {run}')
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit-branch-path test'),
+    git_project_runner.run(re.escape(f'{workdir}/buildit-branch-git_workdir test'),
                            '.*',
                            'run',
                            'test',
                            '{branch}',
-                           '{path}')
+                           '{git_workdir}')
 
 def test_run_substitute_empty_option_name_key(git_project_runner,
                                               git,
@@ -376,7 +376,7 @@ def test_run_substitute_empty_option_name_key(git_project_runner,
                            'add',
                            'run',
                            'test',
-                           '{path}/buildit{option_keysep}{option_key} {run}')
+                           '{git_workdir}/buildit{option_keysep}{option_key} {run}')
 
     # Check run invocation.
     git_project_runner.run(re.escape(f'{workdir}/buildit test'),
