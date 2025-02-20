@@ -20,7 +20,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-from git_project import ConfigObject, Git, Plugin, Project
+from git_project import ConfigObject, Git, GitProject, Plugin, Project
 from git_project import ScopedConfigObject
 from git_project import add_top_level_command, GitProjectException
 
@@ -534,20 +534,41 @@ class WorktreePlugin(Plugin):
         if clone_parser:
             command_clone = clone_parser.get_default('func')
 
+            # Some source trees (i.e. go) don't work well with worktrees
+            # alongside a directory named ".git" so instead create a hidden
+            # directory that incorporates the last component of the url, with
+            # ",git" appended if necessary.
+            def get_hidden_gitdir_name(url: str):
+                result = urllib.parse.urlparse(url)
+                urlpath = Path(result.path)
+
+                # If .git is the suffix, remove it.  If ".git" is the last
+                # component, use the parent name.
+                urlname = urlpath.name
+                if urlname == '.git':
+                    urlname = urlpath.parent.name
+
+                if not urlname.endswith('.git'):
+                    urlname += '.git'
+
+                return '.' + urlname
+
             def worktree_command_clone(p_git, p_gitproject, p_project, clargs):
                 if clargs.worktree:
                     path = Path.cwd()
                     if hasattr(clargs, 'path') and clargs.path:
                         path = Path(clargs.path)
 
-                    path = path / '.git'
+                    assert hasattr(clargs, 'url')
+
+                    path = path / get_hidden_gitdir_name(clargs.url)
 
                     bare_specified = clargs.bare
 
                     setattr(clargs, 'path', str(path))
                     setattr(clargs, 'bare', True)
 
-                    # Bare clone to the hidden .git directory.
+                    # Bare clone to the hidden directory.
                     path = command_clone(p_git, p_gitproject, p_project, clargs)
 
                     # If the user did not ask for a bare repo, rewrite refspecs,
@@ -617,6 +638,22 @@ class WorktreePlugin(Plugin):
                             elif os.path.isdir(path):
                                 shutil.rmtree(path)
                                 assert not os.path.exists(path)
+
+                        # Rename .git to something else (see
+                        # get_hidden_gitdir_name).
+                        assert gitdir.is_dir()
+                        assert gitdir.name == '.git'
+
+                        remote = next(p_project.iterremotes())
+                        newgitdir = gitdir.parent / get_hidden_gitdir_name(p_git.get_remote_url(remote))
+                        gitdir.rename(newgitdir)
+                        assert newgitdir.exists()
+                        assert not gitdir.exists()
+
+                        # Update the git object so main can continue.
+                        p_git.reinit(newgitdir)
+                        assert Path(p_git.get_gitdir()) == newgitdir
+                        p_git.validate_config()
 
                     if was_bare:
                         workarea_root = Path(p_git.get_gitdir()).parent
