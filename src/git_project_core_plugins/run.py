@@ -90,8 +90,7 @@ class RunConfig(ConfigObject):
                            **kwargs)
 
 class RunPlugin(Plugin):
-    """
-    The run command executes commands via a shell.
+    """The run command executes commands via a shell.
 
     Summary:
 
@@ -141,6 +140,41 @@ class RunPlugin(Plugin):
 
       git project build all -> make -C /cur/workarea BLDDIR=/path/to/all all
       git project build some -> make -C /cur/workarea BLDDIR=/path/to/some some
+
+    Extra options passed to the run command may be referenced in the command
+    string:
+
+      git project add build extra "echo {options}"
+      git project build extra hello world! -> echo hello world!
+
+    Individual options may also be referenced:
+
+      git project add build extra "echo {options_1} {options_0}"
+      git project build extra hello world! -> echo world! hello
+
+    A special dash-separated "key" string composed of option values may be
+    generated:
+
+      git project add build any "make {option_key}"
+      git project build any target debug -> make target-debug
+
+    A special {option_keysep} substitution will result in a - if there are
+    options and the empty string otherwisa:
+
+      git project add build build any "make my{option_keysep}{option_key}"
+      git project build any target debug -> make my-target-debug
+      git project build any -> make my
+
+    Other substitutions may be used in options:
+
+      git project add build branch "make {options}"
+      git project build branch {branch} -> make dev  # On the dev branch
+
+    A special substitution {option_names} is a space-separated list of option
+    values with no additional substitutions:
+
+      git project add build branch "make {option_names} {options}"
+      git project build branch {branch} -> make branch dev  # On the dev branch
 
     Some plugins may add scoping rules to the project config, such that a scope
     nested inside the project may override the global project config key value.
@@ -357,6 +391,9 @@ class RunPlugin(Plugin):
                     'option_key': option_key,
                     'option_keysep': '-' if len(clargs.options) > 0 else ''
                 }
+
+                for i, option in enumerate(clargs.options):
+                    formats[f'options_{i}'] = option
 
                 run.run(git, project, formats)
 

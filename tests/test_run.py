@@ -383,3 +383,26 @@ def test_run_substitute_empty_option_name_key(git_project_runner,
                            '.*',
                            'run',
                            'test')
+
+def test_run_substitute_option_positions(git_project_runner,
+                                         git,
+                                         capsys):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    # Add a run.
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'run',
+                           'test',
+                           '{git_workdir}/buildit {options_1} {run} {options_0}')
+
+    # Check run invocation.
+    git_project_runner.run(re.escape(f'{workdir}/buildit foo test master'),
+                           '.*',
+                           'run',
+                           'test',
+                           '{branch}',
+                           'foo')

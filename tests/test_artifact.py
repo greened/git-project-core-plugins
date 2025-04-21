@@ -95,10 +95,10 @@ def test_artifact_get(reset_directory,
     artifact = Artifact.get(git,
                             project.get_section(),
                             'worktree',
-                            path='{builddir}')
+                            itempath='{builddir}')
 
     assert artifact._section == 'project.artifact.worktree'
-    assert artifact.path == '{builddir}'
+    assert artifact.itempath == '{builddir}'
 
 def test_artifact_add(git_project_runner,
                       git):
@@ -114,7 +114,7 @@ def test_artifact_add(git_project_runner,
                            '{builddir}')
 
     check_config_file('project.artifact.worktree',
-                      'path',
+                      'itempath',
                       {'{builddir}'})
 
 def test_artifact_rm_item(git_project_runner,
@@ -138,7 +138,7 @@ def test_artifact_rm_item(git_project_runner,
                            '{installdir}')
 
     check_config_file('project.artifact.worktree',
-                      'path',
+                      'itempath',
                       {'{builddir}', '{installdir}'})
 
     git_project_runner.run('.*',
@@ -149,7 +149,7 @@ def test_artifact_rm_item(git_project_runner,
                            '\\\\{builddir\\\\}')
 
     check_config_file('project.artifact.worktree',
-                      'path',
+                      'itempath',
                       {'{installdir}'})
 
 def test_artifact_rm_items(git_project_runner,
@@ -174,7 +174,7 @@ def test_artifact_rm_items(git_project_runner,
                            '{installdir}')
 
     check_config_file('project.artifact.worktree',
-                      'path',
+                      'itempath',
                       {'{builddir}', '{installdir}'})
 
     git_project_runner.run('.*',
@@ -184,7 +184,7 @@ def test_artifact_rm_items(git_project_runner,
                            'worktree')
 
     check_config_file('project.artifact.worktree',
-                      'path',
+                      'itempath',
                       {'{builddir}, ''{installdir}'},
                       section_present = False)
 

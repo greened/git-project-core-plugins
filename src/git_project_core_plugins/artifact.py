@@ -125,13 +125,28 @@ class Artifact(SubstitutableConfigObject):
     def get_managing_command(cls):
         return 'artifact'
 
+    def rm(self, git, project, clargs, string):
+        """Remove the paths associated with this Artifact.
+
+        git: An object to query the repository and make config changes.
+
+        project: The currently active Project.
+
+        clargs: Command-line arguments
+
+        string: The string on which to perform substitution.
+
+        """
+        for path in self.iter_multival('itempath'):
+            path = self.substitute_value(git, poject, clargs, path)
+
 def command_artifact_add(git, gitproject, project, clargs):
     """Implement git-project artifact add."""
     ident = clargs.subsection
     path = clargs.path
 
     artifact = Artifact.get(git, project.get_section(), ident)
-    artifact.add_item('path', path)
+    artifact.add_item('itempath', path)
 
 def command_artifact_rm(git, gitproject, project, clargs):
     """Implement git-project artifact rm."""
@@ -141,9 +156,9 @@ def command_artifact_rm(git, gitproject, project, clargs):
 
     if hasattr(clargs, 'path') and clargs.path:
         path = clargs.path
-        artifact.rm_item('path', path)
+        artifact.rm_item('itempath', path)
     else:
-        artifact.rm_items('path')
+        artifact.rm_items('itempath')
 
 class ArtifactPlugin(Plugin):
     """
@@ -313,7 +328,7 @@ the final git config section that will hold the artifact path.
                                         self._subsection)
 
             if artifact:
-                for path in artifact.iter_multival('path'):
+                for path in artifact.iter_multival('itempath'):
                     fullpath = artifact.substitute_value(self._git, project, path)
                     run_command_with_shell(f'rm -rf {fullpath}',
                                            show_command=True)
