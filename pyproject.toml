@@ -31,7 +31,7 @@ name = "git-project-core-plugins"
 dynamic = ["dependencies", "readme", "version"]
 description = "The extensible stupid project manager - core functionality"
 license = "AGPL-3.0-or-later"
-requires-python = ">=3"
+requires-python = ">=3.9"
 authors = [
     { name = "David A. Greene", email = "dag@obbligato.org" },
 ]
@@ -95,7 +95,7 @@ cov = [
 ]
 
 [[tool.hatch.envs.all.matrix]]
-python = ["3.7", "3.8", "3.9", "3.10", "3.11"]
+python = ["3.9", "3.10", "3.11"]
 
 [tool.hatch.envs.lint]
 detached = true
