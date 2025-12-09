@@ -456,6 +456,7 @@ def test_worktree_add(git,
     assert os.path.exists(workarea.parent / 'test')
     assert git.branch_name_to_refname('test') == 'refs/heads/test'
 
+
 def test_worktree_add_subdir(git,
                              git_project_runner,
                              tmp_path_factory):
@@ -472,10 +473,107 @@ def test_worktree_add_subdir(git,
                            '',
                            'worktree',
                            'add',
-                           '../user/test',
+                           '../user/test2',
                            'master')
 
-    assert os.path.exists(workarea.parent / 'user' / 'test')
-    os.chdir(workarea.parent / 'user' / 'test')
+    assert os.path.exists(workarea.parent / 'user' / 'test2')
+    os.chdir(workarea.parent / 'user' / 'test2')
     git = git_project.Git()  # Reinitialize in new workarea.
-    assert git.get_current_branch() == 'user/test'
+    assert git.get_current_branch() == 'user/test2'
+
+
+def test_worktree_rm(git, git_project_runner, tmp_path_factory):
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    git = git_project.Git()  # Reinitialize in new workarea.
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           '../user/test_rm',
+                           'master')
+
+    assert os.path.exists(workarea.parent / 'user' / 'test_rm')
+    os.chdir(workarea.parent / 'user' / 'test_rm')
+    git = git_project.Git()  # Reinitialize in new workarea.
+    assert git.get_current_branch() == 'user/test_rm'
+
+    assert os.path.exists(workarea.parent / 'user' / 'test_rm')
+
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'rm',
+                           'test_rm')
+
+    assert not os.path.exists(workarea.parent / 'user' / 'test_rm')
+
+
+def test_worktree_add_in_workarea(git,
+                                  git_project_runner,
+                                  tmp_path_factory):
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           'test_workarea',
+                           'master')
+
+    assert os.path.exists(workarea / 'test_workarea')
+    os.chdir(workarea / 'test_workarea')
+    git = git_project.Git()  # Reinitialize in new workarea.
+    assert git.get_current_branch() == 'test_workarea'
+
+
+def test_worktree_rm_in_workarea(git, git_project_runner, tmp_path_factory):
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    assert os.path.exists(workarea / '.git')
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           'test_rm_workarea',
+                           'master')
+
+    assert os.path.exists(workarea / 'test_rm_workarea')
+    os.chdir(workarea / 'test_rm_workarea')
+    git = git_project.Git()  # Reinitialize in new workarea.
+    assert git.get_current_branch() == 'test_rm_workarea'
+
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'rm',
+                           'test_rm_workarea')
+
+    assert not os.path.exists(workarea / 'test_rm_workarea')
