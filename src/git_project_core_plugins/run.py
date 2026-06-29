@@ -107,7 +107,7 @@ class RunPlugin(Plugin):
     example:
 
       git <project> run --make-alias build
-      git <project> add build all "make -C {path} all"
+      git <project> add build all "make -C {git_workdir} all"
       git <project> build all
 
     Note that an alias will prevent ``run'' from invoking the command so in the
@@ -124,15 +124,15 @@ class RunPlugin(Plugin):
     In general any project config {key} will be replaced with its value before
     the command is executed.  Substitution occurs recursively, so if a {key}
     value itself contains a substitution string, it will be replaced as well.
-    There are a few special case substitutions.  The {path} key will be replaced
-    by the absolute path to the root of the current workarea.  The {branch} key
-    will be replaced by the currently-active branch nme.  In addition the {run}
-    (or {build}, etc. aliases) will be replaced by their names.  Again, an
-    example will make this more clear:
+    There are a few special case substitutions.  The {git_workdir} key will be
+    replaced by the absolute path to the root of the current workarea.  The
+    {branch} key will be replaced by the currently-active branch nme.  In
+    addition the {run} (or {build}, etc. aliases) will be replaced by their
+    names.  Again, an example will make this more clear:
 
-      git <project> config cmd "make -C {path} BLDDIR=/path/to/{build} {build}"
-      git project add build all "{cmd}"
-      git project add build some "{cmd}"
+      git <project> config cmd "make -C {git_workdir} BLDDIR=/path/to/{build}
+      {build}" git project add build all "{cmd}" git project add build some
+      "{cmd}"
 
     We have configured two different build flavors, each which place build
     results in separate directories and invoke different targets.  Substitution
