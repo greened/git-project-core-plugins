@@ -395,7 +395,7 @@ class RunPlugin(Plugin):
                 for i, option in enumerate(clargs.options):
                     formats[f'options_{i}'] = option
 
-                run.run(git, project, formats)
+                return run.run(git, project, formats)
 
         run_parser.set_defaults(func=command_run)
 
