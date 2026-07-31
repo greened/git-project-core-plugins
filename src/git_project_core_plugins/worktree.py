@@ -86,7 +86,11 @@ def get_name_branch_path_and_refname(git, gp, clargs):
     path = normalize_path(git, clargs.path)
     refname = git.committish_to_refname('HEAD')
     if hasattr(clargs, 'committish') and clargs.committish:
-        refname = git.committish_to_refname(clargs.committish)
+        # A committish may resolve to a commit with no ref (bare SHA);
+        # committish_to_refname would fail there, so fall back to the
+        # committish itself and let create_branch branch at that commit.
+        ref = git.committish_to_ref(clargs.committish)
+        refname = ref.name if ref is not None else clargs.committish
 
     return name, branch, path, refname
 
