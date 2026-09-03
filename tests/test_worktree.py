@@ -59,6 +59,8 @@ def test_worktree_add_arguments(reset_directory,
     worktree_rm_args = [
         'name',
         '-f',
+        '--keep-branch',
+        '--keep-remote-branch',
     ]
 
     common.check_args(worktree_rm_parser, worktree_rm_args)
@@ -519,6 +521,96 @@ def test_worktree_rm(git, git_project_runner, tmp_path_factory):
 
     assert not os.path.exists(workarea.parent / 'user' / 'test_rm')
 
+    git = git_project.Git()  # Reinitialize after the worktree went away.
+
+    assert not git.committish_exists('user/test_rm')
+
+
+def test_worktree_rm_keep_branch(git, git_project_runner, tmp_path_factory):
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    git = git_project.Git()  # Reinitialize in new workarea.
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           '../user/test_keep_branch',
+                           'master')
+
+    assert os.path.exists(workarea.parent / 'user' / 'test_keep_branch')
+    assert git.committish_exists('user/test_keep_branch')
+
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'rm',
+                           '--keep-branch',
+                           'test_keep_branch')
+
+    assert not os.path.exists(workarea.parent / 'user' / 'test_keep_branch')
+
+    git = git_project.Git()  # Reinitialize after the worktree went away.
+
+    assert git.committish_exists('user/test_keep_branch')
+
+def test_worktree_rm_keep_remote_branch(git,
+                                        git_project_runner,
+                                        tmp_path_factory,
+                                        monkeypatch):
+    # This is the only test that pushes, so it is the only one that reaches a
+    # pre-push hook.  Ignore the user's git configuration to keep it hermetic.
+    monkeypatch.setenv('GIT_CONFIG_GLOBAL', '/dev/null')
+    monkeypatch.setenv('GIT_CONFIG_NOSYSTEM', '1')
+
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    git = git_project.Git()  # Reinitialize in new workarea.
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           '../user/test_keep_remote',
+                           'master')
+
+    # prune_branch only deletes from a remote the branch is actually on, so
+    # push it first or the assertion below holds no matter what rm does.  Name
+    # the destination ref explicitly: the fixture remote is a mirror and also
+    # carries refs/remotes/origin/*, so a bare branch name lands there instead
+    # of in refs/heads, which is the only place remote_branch_exists looks.
+    git_project.capture_command('git push origin '
+                                'user/test_keep_remote:refs/heads/user/test_keep_remote')
+
+    assert git.remote_branch_exists('user/test_keep_remote', 'origin')
+
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'rm',
+                           '--keep-remote-branch',
+                           'test_keep_remote')
+
+    assert not os.path.exists(workarea.parent / 'user' / 'test_keep_remote')
+
+    git = git_project.Git()  # Reinitialize after the worktree went away.
+
+    assert not git.committish_exists('user/test_keep_remote')
+    assert git.remote_branch_exists('user/test_keep_remote', 'origin')
 
 def test_worktree_add_in_workarea(git,
                                   git_project_runner,

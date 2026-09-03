@@ -134,7 +134,8 @@ def command_worktree_rm(git, gitproject, project, clargs):
     if not project.branch_is_merged(worktree.committish) and not clargs.force:
         raise GitProjectException(f'Worktree branch {worktree.committish} is not merged, use -f to force')
 
-    worktree.rm()
+    worktree.rm(keep_branch=clargs.keep_branch,
+                keep_remote_branch=clargs.keep_remote_branch)
 
 class Worktree(ScopedConfigObject):
     """A ScopedConfigObject to manage worktree git configs."""
@@ -271,8 +272,16 @@ class Worktree(ScopedConfigObject):
         """Create a new worktree"""
         self._git.add_worktree(self.get_ident(), self.path, self.committish)
 
-    def rm(self):
-        """Remove a worktree, deleting its workarea, builds and installs."""
+    def rm(self, keep_branch=False, keep_remote_branch=False):
+        """Remove a worktree, deleting its workarea, builds and installs.
+
+        keep_branch: If True, leave the worktree's branch alone, both locally
+        and on any remotes.
+
+        keep_remote_branch: If True, delete the local branch but leave it in
+        place on every remote.  Implied by keep_branch.
+
+        """
         # TODO: Use python utils.
         try:
             shutil.rmtree(self.path)
@@ -286,15 +295,17 @@ class Worktree(ScopedConfigObject):
 
         project = Project.get(self._git, self._project_section)
 
-        for branch in project.iterbranches():
-            if branch not in self._git.iterbranches():
-                continue
-            branch_name = self._git.committish_to_refname(branch)
-            committish_name = self._git.committish_to_refname(self.committish)
-            if branch_name == committish_name:
-                break
-        else:
-            project.prune_branch(self.committish)
+        if not keep_branch:
+            for branch in project.iterbranches():
+                if branch not in self._git.iterbranches():
+                    continue
+                branch_name = self._git.committish_to_refname(branch)
+                committish_name = self._git.committish_to_refname(self.committish)
+                if branch_name == committish_name:
+                    break
+            else:
+                project.prune_branch(self.committish,
+                                     keep_remote_branch=keep_remote_branch)
 
         self._pathsection.rm()
         super().rm()
@@ -306,7 +317,8 @@ class WorktreePlugin(Plugin):
     Summary:
 
       git <project> worktree add [-b <branch>] <name-or-path> [<committish>]
-      git <project> worktree rm <name-or-path>
+      git <project> worktree rm [-f] [--keep-branch] [--keep-remote-branch]
+                                <name-or-path>
       git <project> worktree config <key> [<value>]
       git <project> worktree config [--unset] <key> [<value>]
 
@@ -459,6 +471,11 @@ class WorktreePlugin(Plugin):
                                         help='Worktree to remove')
         worktree_rm_parser.add_argument('-f', '--force', action='store_true',
                                         help='Remove even if branch is not merged')
+        worktree_rm_parser.add_argument('--keep-branch', action='store_true',
+                                        help='Keep the branch, locally and on remotes')
+        worktree_rm_parser.add_argument('--keep-remote-branch',
+                                        action='store_true',
+                                        help='Keep the branch on remotes, deleting only the local copy')
 
         # add a clone option to create a worktree layout.
         clone_parser = parser_manager.find_parser('clone')
