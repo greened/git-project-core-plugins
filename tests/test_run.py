@@ -28,6 +28,20 @@ from git_project.test_support import check_config_file
 from git_project_core_plugins import RunPlugin
 import common
 
+def make_script(*paths, status=0):
+    """Create an executable script at each of paths, exiting with status.  Create
+    each script's parent directory as well if it does not exist.
+
+    A test that invokes a run command has to create the script the command runs,
+    because run propagates the exit code and a missing script fails the run.
+
+    """
+    for path in paths:
+        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as script:
+            script.write(f'#!/bin/sh\nexit {status}\n')
+        os.chmod(path, 0o755)
+
 def test_run_add_arguments(reset_directory,
                            project,
                            git_project_runner):
@@ -78,6 +92,8 @@ def test_run_add_and_run(git_project_runner,
 
     git_project_runner.chdir(workdir)
 
+    make_script(f'{workdir}/doit')
+
     git_project_runner.run('.*',
                            '',
                            'add',
@@ -90,11 +106,35 @@ def test_run_add_and_run(git_project_runner,
                            'run',
                            'test')
 
+def test_run_exit_code(git_project_runner,
+                       git,
+                       script_runner):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    # 3 is not a status anything else in the pipeline produces, so it cannot be
+    # confused with a shell, argparse, crash or git-project error.
+    make_script(f'{workdir}/doit', status=3)
+
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'run',
+                           'test',
+                           '{git_workdir}/doit {branch}')
+
+    ret = script_runner.run(['git-project', 'run', 'test'], cwd=workdir)
+
+    assert ret.returncode == 3
+
 def test_run_recursive_sub(git_project_runner,
                            git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
+
+    make_script(f'{workdir}/master/doit')
 
     git_project_runner.run('.*',
                            '',
@@ -118,6 +158,9 @@ def test_run_no_dup(reset_directory, git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
+
+    make_script(f'{workdir}/master/doit',
+                f'{workdir}/master/check-doit')
 
     git_project_runner.run('.*',
                            '',
@@ -170,6 +213,8 @@ def test_run_add_alias(git_project_runner,
 
     git_project_runner.chdir(workdir)
 
+    make_script(f'{workdir}/buildit')
+
     # Add aliases.
     git_project_runner.run('.*',
                            '',
@@ -207,6 +252,9 @@ def test_run_substitute_alias(git_project_runner,
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
+
+    make_script(f'{workdir}/buildit',
+                f'{workdir}/checkit')
 
     # Add aliases.
     git_project_runner.run('.*',
@@ -260,6 +308,8 @@ def test_run_substitute_options(git_project_runner,
 
     git_project_runner.chdir(workdir)
 
+    make_script(f'{workdir}/buildit')
+
     # Add a run.
     git_project_runner.run('.*',
                            '',
@@ -282,6 +332,8 @@ def test_run_substitute_empty_options(git_project_runner,
 
     git_project_runner.chdir(workdir)
 
+    make_script(f'{workdir}/buildit')
+
     # Add a run.
     git_project_runner.run('.*',
                            '',
@@ -302,6 +354,8 @@ def test_run_substitute_option_names(git_project_runner,
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
+
+    make_script(f'{workdir}/buildit')
 
     # Add a run.
     git_project_runner.run('.*',
@@ -326,6 +380,8 @@ def test_run_substitute_empty_option_names(git_project_runner,
 
     git_project_runner.chdir(workdir)
 
+    make_script(f'{workdir}/buildit')
+
     # Add a run.
     git_project_runner.run('.*',
                            '',
@@ -346,6 +402,8 @@ def test_run_substitute_option_name_key(git_project_runner,
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
+
+    make_script(f'{workdir}/buildit-branch-git_workdir')
 
     # Add a run.
     git_project_runner.run('.*',
@@ -370,6 +428,8 @@ def test_run_substitute_empty_option_name_key(git_project_runner,
 
     git_project_runner.chdir(workdir)
 
+    make_script(f'{workdir}/buildit')
+
     # Add a run.
     git_project_runner.run('.*',
                            '',
@@ -390,6 +450,8 @@ def test_run_substitute_option_positions(git_project_runner,
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
+
+    make_script(f'{workdir}/buildit')
 
     # Add a run.
     git_project_runner.run('.*',
