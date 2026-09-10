@@ -131,7 +131,13 @@ def command_worktree_rm(git, gitproject, project, clargs):
     name = clargs.name
     worktree = Worktree.get(git, project, name)
 
-    if not project.branch_is_merged(worktree.committish) and not clargs.force:
+    # The merge check protects the branch's commits, so it applies only when we
+    # are going to delete the branch.  --keep-branch leaves the branch in place
+    # both locally and on remotes, so the merge state cannot cost anything.
+    # --keep-remote-branch still deletes the local branch, so it still applies.
+    if (not clargs.keep_branch
+        and not project.branch_is_merged(worktree.committish)
+        and not clargs.force):
         raise GitProjectException(f'Worktree branch {worktree.committish} is not merged, use -f to force')
 
     worktree.rm(keep_branch=clargs.keep_branch,

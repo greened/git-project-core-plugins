@@ -561,6 +561,99 @@ def test_worktree_rm_keep_branch(git, git_project_runner, tmp_path_factory):
 
     assert git.committish_exists('user/test_keep_branch')
 
+def test_worktree_rm_unmerged_requires_force(git,
+                                             git_project_runner,
+                                             tmp_path_factory):
+    # Branch the worktree off the fixture's unmerged branch so the merge check
+    # actually fires.  Every other rm test branches off master, which is
+    # merged by construction.
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    git = git_project.Git()  # Reinitialize in new workarea.
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           '../user/test_rm_unmerged',
+                           'unmerged')
+
+    assert os.path.exists(workarea.parent / 'user' / 'test_rm_unmerged')
+
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.expect_fail = True
+
+    # A plain rm prunes the branch, so losing it would lose the commits.
+    git_project_runner.run('Worktree branch .*test_rm_unmerged is not merged, use -f to force',
+                           '',
+                           'worktree',
+                           'rm',
+                           'test_rm_unmerged')
+
+    # --keep-remote-branch keeps only the remote copy, and this branch was
+    # never pushed, so the local branch is still the only copy.
+    git_project_runner.run('Worktree branch .*test_rm_unmerged is not merged, use -f to force',
+                           '',
+                           'worktree',
+                           'rm',
+                           '--keep-remote-branch',
+                           'test_rm_unmerged')
+
+    # The check runs before anything is destroyed.
+    assert os.path.exists(workarea.parent / 'user' / 'test_rm_unmerged')
+
+    git = git_project.Git()
+
+    assert git.committish_exists('user/test_rm_unmerged')
+
+def test_worktree_rm_keep_branch_unmerged(git,
+                                          git_project_runner,
+                                          tmp_path_factory):
+    # --keep-branch keeps the branch, so an unmerged branch costs nothing and
+    # rm does not demand -f.
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+
+    git = git_project.Git()  # Reinitialize in new workarea.
+
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           '../user/test_keep_unmerged',
+                           'unmerged')
+
+    assert os.path.exists(workarea.parent / 'user' / 'test_keep_unmerged')
+
+    # Guard against a false pass.  If this branch were merged, the check under
+    # test would be skipped for the wrong reason and rm would succeed anyway.
+    assert not git.refname_is_merged('user/test_keep_unmerged', 'master')
+
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'rm',
+                           '--keep-branch',
+                           'test_keep_unmerged')
+
+    assert not os.path.exists(workarea.parent / 'user' / 'test_keep_unmerged')
+
+    git = git_project.Git()  # Reinitialize after the worktree went away.
+
+    assert git.committish_exists('user/test_keep_unmerged')
+
 def test_worktree_rm_keep_remote_branch(git,
                                         git_project_runner,
                                         tmp_path_factory,
