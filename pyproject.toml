@@ -225,6 +225,16 @@ content-type = "text/x-rst"
 #"""
 
 [[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "docs/intro.rst"
+start-after = "along with git-project. If not, see <https://www.gnu.org/licenses/>.\n"
+
+# Fragments are concatenated verbatim, and intro.rst ends in a literal block.
+# Without a blank line here the next fragment unindents into it, which is an RST
+# error and makes PyPI reject the description.
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+text = "\n"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
 path = "docs/authors.rst"
 end-before = "A full list of contributors"
 
