@@ -27,7 +27,7 @@ branches.
 Summary:
 
 git-project branch status [<pattern>]
-git-project branch prune [--no-ask] [<pattern>]
+git-project branch prune [--no-ask] [--keep-remote-branch] [<pattern>]
 
 """
 from git_project import Git, RunnableConfigObject, Plugin
@@ -36,6 +36,7 @@ from git_project import add_top_level_command, Project, GitProjectException
 from git_project_core_plugins.common import add_plugin_version_argument
 
 import getpass
+import sys
 
 def query_yes_no(question, default="yes"):
     """Ask a yes/no question via input() and return their answer.
@@ -142,7 +143,9 @@ def command_branch_prune(git, gitproject, project, clargs):
                      branch_width=branch_width, status_width=status_width))
         if clargs.force or status == 'merged':
             if clargs.no_ask or query_yes_no('Prune?', default=None):
-                project.prune_branch(branch)
+                project.prune_branch(
+                    branch,
+                    keep_remote_branch=clargs.keep_remote_branch)
 
 class BranchPlugin(Plugin):
     """
@@ -152,7 +155,7 @@ class BranchPlugin(Plugin):
     Summary:
 
       git <project> branch status [--all] [<refish>]
-      git <project> branch prune [--force] [--no-ask]
+      git <project> branch prune [--force] [--no-ask] [--keep-remote-branch]
 
     The branch status command checks the given <refish> (or all local branches
     with the --all option) against the project-configured branches.  The command
@@ -173,7 +176,10 @@ class BranchPlugin(Plugin):
 
     With --force, branches will be pruneed regardless of merge/push status.
     With --no-ask branch prune operates in batch mode, assuming all merged and
-    pushed branches should be pruned.
+    pushed branches should be pruned.  With --keep-remote-branch, only the local
+    branch is deleted and the remote counterpart is left in place.  This is the
+    same option worktree rm takes, and it matters more here, because branch prune
+    acts on every branch matching the pattern.
 
     See also:
 
@@ -227,3 +233,6 @@ class BranchPlugin(Plugin):
         branch_prune_parser.add_argument('--all-user', action='store_true', help='Prune all user\'s branches')
         branch_prune_parser.add_argument('--force', action='store_true', help='Prune even if unmerged')
         branch_prune_parser.add_argument('--no-ask', action='store_true', help='Do not ask before pruning')
+        branch_prune_parser.add_argument('--keep-remote-branch',
+                                         action='store_true',
+                                         help='Keep the branch on remotes, deleting only the local copy')

@@ -59,6 +59,7 @@ def test_add_arguments(reset_directory,
         '--all-user',
         '--force',
         '--no-ask',
+        '--keep-remote-branch',
     ]
 
     common.check_args(branch_prune_parser, branch_prune_args)
@@ -145,6 +146,7 @@ def test_branch_prune(reset_directory,
         'all': True,
         'no_ask': True,
         'force': False,
+        'keep_remote_branch': False,
     }
 
     command_branch_prune(git,
@@ -165,6 +167,57 @@ refs/heads/merged_remote                     merged
     assert not git.committish_exists('merged_remote')
     assert not git.committish_exists('refs/heads/merged_remote')
     assert not git.committish_exists('refs/remotes/origin/merged_remote')
+
+def test_branch_prune_keep_remote_branch(reset_directory,
+                                         git,
+                                         gitproject,
+                                         project,
+                                         parser_manager,
+                                         plugin_manager,
+                                         capsys):
+    plugin = BranchPlugin()
+
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
+
+    branch_prune_parser = parser_manager.find_parser('branch-prune')
+
+    command_branch_prune = branch_prune_parser.get_default('func')
+
+    # Guard against a false pass.  The remote copy has to be there before the
+    # prune, or the assertion below holds no matter what prune does.
+    assert git.committish_exists('refs/remotes/origin/merged_remote')
+
+    clargs = {
+        'name_or_ref': 'merged_remote',
+        'all': True,
+        'no_ask': True,
+        'force': False,
+        'keep_remote_branch': True,
+    }
+
+    command_branch_prune(git,
+                         gitproject,
+                         project,
+                         common.AttrDict(clargs))
+
+    captured = capsys.readouterr()
+
+    expected = """---------------------------------------------------------------------------
+branch                                       local status   remote status  
+---------------------------------------------------------------------------
+refs/heads/merged_remote                     merged         
+"""
+    assert captured.out == expected
+    assert captured.err == ''
+
+    # The local branch goes, the remote copy stays.
+    assert not git.committish_exists('merged_remote')
+    assert not git.committish_exists('refs/heads/merged_remote')
+    assert git.committish_exists('refs/remotes/origin/merged_remote')
 
 def test_branch_prune_script(reset_directory,
                              git,
