@@ -39,5 +39,12 @@ __pycache__/
 # Editor backup files.
 *~
 
-# Test output.
-/test.out
+# Coverage data.  The coverage config sets parallel, so each run also writes
+# .coverage.<host>.<pid>.<random> files for coverage combine.
+.coverage*
+
+# Coverage HTML report.
+/htmlcov/
+
+# Sphinx build output.
+/docs/_build/
