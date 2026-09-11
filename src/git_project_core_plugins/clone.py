@@ -33,11 +33,6 @@ from git_project import add_top_level_command, Plugin
 
 from git_project_core_plugins.common import add_plugin_version_argument
 
-import getpass
-import os
-from pathlib import Path
-import pygit2
-
 def command_clone(git, gitproject, project, clargs):
     """Implement git-project clone"""
     gitdir = git.clone(clargs.url,
