@@ -30,10 +30,37 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+
+`0.0.26`_ - 2026-09-15
+----------------------
 Added
 .....
+- ``worktree rm`` takes ``--keep-branch`` and ``--keep-remote-branch``. It
+  previously always pruned the worktree's branch, locally and from every
+  project remote, so retiring a worktree destroyed its branch.
+  ``--keep-branch`` skips the prune entirely and supersedes
+  ``--keep-remote-branch``.
+- ``branch prune`` takes ``--keep-remote-branch``, the same option
+  ``worktree rm`` takes. It matters more here, because ``branch prune`` acts on
+  every branch matching the pattern.
+
+Changed
+.......
+- git-project 0.0.38 or later is now required. ``Worktree.rm`` passes
+  ``keep_remote_branch`` unconditionally, so against an older git-project even
+  a plain ``worktree rm`` raises ``TypeError``.
+- Python 3.10 or later is now required, matching git-project.
+- The user documentation now lives in ``docs/intro.rst``, which also supplies
+  the PyPI description.
 
 Fixed
 .....
+- ``branch prune`` without ``--no-ask``, which is the interactive path and the
+  default, raised ``NameError``. The module never imported ``sys``, which
+  ``query_yes_no`` uses, so that path had never worked.
+- ``worktree rm`` no longer demands ``-f`` for an unmerged branch under
+  ``--keep-branch``. The branch survives there both locally and on every
+  remote, so its merge state cannot cost anything.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/changes/0.0.1...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.26...HEAD
+.. _0.0.26: https://github.com/greened/git-project-core-plugins/compare/v0.0.25...v0.0.26
