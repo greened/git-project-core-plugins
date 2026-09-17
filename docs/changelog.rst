@@ -50,8 +50,10 @@ Changed
   ``keep_remote_branch`` unconditionally, so against an older git-project even
   a plain ``worktree rm`` raises ``TypeError``.
 - Python 3.10 or later is now required, matching git-project.
-- The user documentation now lives in ``docs/intro.rst``, which also supplies
-  the PyPI description.
+- The module docstring is now the single source for this package's
+  documentation. ``docs/intro.rst`` pulls it in with ``automodule`` and the
+  PyPI description is built from it, so the command reference reaches both
+  instead of neither.
 
 Fixed
 .....

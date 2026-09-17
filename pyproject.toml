@@ -19,8 +19,7 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 [build-system]
-requires = ["hatchling", "hatch-fancy-pypi-readme", "hatch-requirements-txt",
-            "hatch-vcs"]
+requires = ["hatchling", "hatch-requirements-txt", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.hooks.vcs]
@@ -121,6 +120,17 @@ all = [
   "typing",
 ]
 
+[tool.hatch.envs.docs]
+# NOT detached: autodoc imports the package, because docs/intro.rst pulls the
+# module docstring in with automodule rather than keeping a second copy. A
+# detached env would build with the package absent and the directive would fail.
+dependencies = [
+  "sphinx>=7",
+]
+[tool.hatch.envs.docs.scripts]
+build = "sphinx-build -M html docs docs/_build"
+clean = "sphinx-build -M clean docs docs/_build"
+
 [tool.black]
 target-version = ["py310"]
 line-length = 120
@@ -209,59 +219,10 @@ exclude_lines = [
 Homepage = "https://github.com/greened/git-project-core-plugins#readme"
 source_archive = "https://github.com/greened/git-project-core-plugins/archive/{commit_hash}.zip"
 
-[tool.hatch.metadata.hooks.fancy-pypi-readme]
-content-type = "text/x-rst"
-
-#[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
-#path = "src/git_project_core_plugins/__init__.py"
-#start-after = "\"\"\""
-#end-before = "-------"
-
-#[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
-#text = """
-#
-#-------
-#
-#.. contents:: Table of Contents
-#
-#"""
-
-[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
-path = "docs/intro.rst"
-start-after = "along with git-project. If not, see <https://www.gnu.org/licenses/>.\n"
-
-# Fragments are concatenated verbatim, and intro.rst ends in a literal block.
-# Without a blank line here the next fragment unindents into it, which is an RST
-# error and makes PyPI reject the description.
-[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
-text = "\n"
-
-[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
-path = "docs/authors.rst"
-end-before = "A full list of contributors"
-
-#[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
-#path = "docs/changelog.rst"
-#pattern = '(\d+\.\d+\.\d+.+?\n)\d+'
-
-#[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
-#text = """
-#---
-#
-#`→ Full Changelog`_:docs/changelog.rst
-#
-#
-#"""
-
-# Replace relative links with absolute.
-[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
-pattern = '(.+?)_:((?!https?://)\S+?)'
-replacement = '\1_:https://github.com/greened/git-project-core-plugins/tree/main/\g<2>'
-
-# Replace GitHub issue references with links.
-[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
-pattern = ":issue:`(\\d+)`"
-replacement = "#\\1_: https://github.com/greened/git-project-core-plugins/issues/\\1"
+# The long description is assembled by hatch_build.py, which appends the
+# command reference generated from the plugin classes. hatch-fancy-pypi-readme
+# cannot do that: it concatenates files and text, and the reference is neither.
+[tool.hatch.metadata.hooks.custom]
 
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]
