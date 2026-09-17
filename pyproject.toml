@@ -58,8 +58,8 @@ test = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/greened/git-project-core-plugsin#readme"
-Issues = "https://github.com/unknown/greened/issues"
+Documentation = "https://github.com/greened/git-project-core-plugins#readme"
+Issues = "https://github.com/greened/git-project-core-plugins/issues"
 Source = "https://github.com/greened/git-project-core-plugins"
 
 [project.entry-points."git-project.plugins"]
