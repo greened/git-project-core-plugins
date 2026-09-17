@@ -165,7 +165,7 @@ class ArtifactPlugin(Plugin):
     The artifact command adds or removes associations between git config objects
     and file-system objects.
 
-    Summary:
+    Summary::
 
       git <project> artifact add <subsection> <path>
       git <project> artifact rm <subsection> [<path>]
@@ -173,10 +173,10 @@ class ArtifactPlugin(Plugin):
     <subsection> is a git config section which will appear under the
     <project>.artifact section.  Artifacts look up objects associated with
     <subsection> and perform substitutions on paths to yield the final
-    associated file-system object.  The ``artifact rm'' command simply removes
+    associated file-system object.  The ``artifact rm`` command simply removes
     an artifact association, it does not remove the artifact itself.  Multiple
     artifact paths may be associated under a single <subsection> and the option
-    <path> argument to ``artifact rm'' allows us to remove a single association
+    <path> argument to ``artifact rm`` allows us to remove a single association
     rather than all of them at once.
 
     For example:
@@ -184,13 +184,13 @@ class ArtifactPlugin(Plugin):
       git <project> artifact add worktree.myworktree /path/to/artifact
 
     Presumably, /path/to/artifact is in some way created in association with
-    myworktree, for example by the ``run'' command.  When we delete myworktree,
+    myworktree, for example by the ``run`` command.  When we delete myworktree,
     the artifact association causes /path/to/artifact to also be removed.
     Substitutions can make artifact associations easier to manage:
 
       git <project> artifact add worktree /path/to/{worktree}/artifact
 
-    Notice that we've added the artifact under the more general ``worktree''
+    Notice that we've added the artifact under the more general ``worktree``
     subsection instead of naming a worktree explicitly as before.  Because the
     {worktree} substitution appears in the artifact path, deleting any worktree
     will cause the worktree's name to be substituted into the artifact path,
@@ -213,13 +213,13 @@ class ArtifactPlugin(Plugin):
 
     The worktree plugin also modifies the clone and init commands, adding a
     --worktree option to both.  With --worktree, clone will create a ``worktree
-    layout'' as so:
+    layout`` as so:
 
       clonedir
         .git
          master
 
-    Here, ``master'' is a worktree created from the master branch.  ``clonedir''
+    Here, ``master`` is a worktree created from the master branch.  ``clonedir``
     becames a bare repository, though with refspecs that make it operate like a
     regular clone for fetch and push operations.  That is, the cloned repository
     will still have refs/heads and refs/remotes namespaces.
@@ -239,7 +239,7 @@ class ArtifactPlugin(Plugin):
     it will be created automatically, though the user may easily create one
     after conversion.
 
-    See also:
+    See also::
 
       clone
       config

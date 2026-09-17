@@ -320,7 +320,7 @@ class WorktreePlugin(Plugin):
     """
     The worktree command manages worktrees and connects them to projects.
 
-    Summary:
+    Summary::
 
       git <project> worktree add [-b <branch>] <name-or-path> [<committish>]
       git <project> worktree rm [-f] [--keep-branch] [--keep-remote-branch]
@@ -328,7 +328,7 @@ class WorktreePlugin(Plugin):
       git <project> worktree config <key> [<value>]
       git <project> worktree config [--unset] <key> [<value>]
 
-    ``worktree add'' creates a new git worktree named via <name-or-path> with
+    ``worktree add`` creates a new git worktree named via <name-or-path> with
     <committish> checked out.  If we pass -b <branch> we'll get a new branch at
     HEAD or <committish> if it is given.  The worktree name is either the given
     name or if name-or-path is a path, the worktree name will be the same as the
@@ -341,8 +341,8 @@ class WorktreePlugin(Plugin):
     necessary to do so.
 
     The key idea behind project worktrees is that they are connected to various
-    ``artifacts.''  Worktrees are managed together with this artifacts to
-    provide a project-level view of various tasks.  For example, a ``run''
+    ``artifacts.``  Worktrees are managed together with this artifacts to
+    provide a project-level view of various tasks.  For example, a ``run``
     command can create artifacts associated with a worktree.  Removing the
     worktree implicitly removes thee artifacts, making build cleanups easy and
     convenient.  Commands may use the {worktree} substitution to create
@@ -368,7 +368,7 @@ class WorktreePlugin(Plugin):
     switching to work on a new worktree (by simply editing sources in a
     different worktree directory) will not result in build artifacts from thte
     previous worktree being overwritten.  Thus we avoid the ``rebuild the
-    world'' problems of switching branches within the same workarea.  Generally,
+    world`` problems of switching branches within the same workarea.  Generally,
     each created branch will have its own worktree and we will rarely, if ever,
     switch branches within a worktree.
 
@@ -385,7 +385,7 @@ class WorktreePlugin(Plugin):
     worktree without a buildwidth configured), then {buildwidth} will be
     substituted with 16.
 
-    See also:
+    See also::
 
       artifact
       config

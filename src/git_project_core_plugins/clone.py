@@ -50,16 +50,16 @@ class ClonePlugin(Plugin):
     """
     The clone command clones a repository.
 
-    Summary:
+    Summary::
 
       git <project> clone <url> [<path>] [--bare]
 
     By itself clone has just the very basic funcionality of the built-in git
     clone command.  Plugins may add options to give the clone command more
     features.  For example, the woktree command adds a --worktree option to have
-    clone create a ``worktree layout.''
+    clone create a ``worktree layout.``
 
-    See also:
+    See also::
 
       worktree
 

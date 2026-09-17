@@ -152,7 +152,7 @@ class BranchPlugin(Plugin):
     The branch command queries the status of branches against known project
     branches and provides methods to prune old branches.
 
-    Summary:
+    Summary::
 
       git <project> branch status [--all] [<refish>]
       git <project> branch prune [--force] [--no-ask] [--keep-remote-branch]
@@ -181,7 +181,7 @@ class BranchPlugin(Plugin):
     same option worktree rm takes, and it matters more here, because branch prune
     acts on every branch matching the pattern.
 
-    See also:
+    See also::
 
       config
 

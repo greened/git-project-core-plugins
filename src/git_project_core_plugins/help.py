@@ -184,7 +184,7 @@ class HelpPlugin(Plugin):
     """
     The help command displays tutorial-style help for commands.
 
-    Summary:
+    Summary::
 
       git <project> add help [--manpage] <subsection> <text>
       git <project> help <command>
@@ -210,7 +210,7 @@ class HelpPlugin(Plugin):
     <text> is stored in <project>.help.<subsection>.manpage.  Commands may
     reference short help or manpages in various ways to present help.
 
-    See also:
+    See also::
 
       run
 

@@ -74,7 +74,7 @@ class ConfigPlugin(Plugin):
     """
     The config command manages git config settings under the <project> section.
 
-    Summary:
+    Summary::
 
       git <project> config [--add] [--unset] <name> [<value>]
 
@@ -94,7 +94,7 @@ class ConfigPlugin(Plugin):
     commands are run.  Commands should document whether or not they perform
     substitutions.
 
-    A git config ``sub-section'' may be substituted with its identifier.  For
+    A git config ``sub-section`` may be substituted with its identifier.  For
     example:
 
       git <project> worktree add myworktree
@@ -102,10 +102,10 @@ class ConfigPlugin(Plugin):
 
     Here, myworktree is the identifier of a specific worktree sub-section.  If
     myworktree is the currently active worktree (that is, the current directory
-    is under the myworktree root), then ``myworktree'' will substitute for
+    is under the myworktree root), then ``myworktree`` will substitute for
     {woktree}.
 
-    See also:
+    See also::
 
       run
       worktree

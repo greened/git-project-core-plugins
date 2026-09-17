@@ -92,25 +92,25 @@ class RunConfig(ConfigObject):
 class RunPlugin(Plugin):
     """The run command executes commands via a shell.
 
-    Summary:
+    Summary::
 
       git <project> add run <name> <command>
       git <project> run --make-alias <name>
       git <project> run <name>
 
     Full shell substitution is supported, as well as config {key} substitution,
-    where the text ``{key}'' is replaced by key's value.
+    where the text ``{key}`` is replaced by key's value.
 
     The add run command associates a command string with a name.  The run
     command itself invokes the command string via a shell.  With --make-alias,
-    the run comand instead registers an alternative name for ``run.''  For
+    the run comand instead registers an alternative name for ``run.``  For
     example:
 
       git <project> run --make-alias build
       git <project> add build all "make -C {git_workdir} all"
       git <project> build all
 
-    Note that an alias will prevent ``run'' from invoking the command so in the
+    Note that an alias will prevent ``run`` from invoking the command so in the
     above example we could not invoke the build as such:
 
       git <project> run all
@@ -178,10 +178,10 @@ class RunPlugin(Plugin):
 
     Some plugins may add scoping rules to the project config, such that a scope
     nested inside the project may override the global project config key value.
-    For example the worktree plugin adds a ``worktree'' scope.  The worktree may
+    For example the worktree plugin adds a ``worktree`` scope.  The worktree may
     contain key values that override similar keys in the project config.
 
-    See also:
+    See also::
 
       config
       worktree
