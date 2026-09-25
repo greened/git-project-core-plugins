@@ -50,7 +50,7 @@ class InitPlugin(Plugin):
     Basic config entries are added to name the project and default branches.
     Plugins may add options to enhance functionality.  For example the worktree
     command adds a --worktree option to convert an existing local clone to a
-    ``worktree layout.``
+    ``worktree layout``.
 
     See also::
 

@@ -103,20 +103,20 @@ class RunPlugin(Plugin):
 
     The add run command associates a command string with a name.  The run
     command itself invokes the command string via a shell.  With --make-alias,
-    the run comand instead registers an alternative name for ``run.``  For
-    example:
+    the run command instead registers an alternative name for ``run``.  For
+    example::
 
       git <project> run --make-alias build
       git <project> add build all "make -C {git_workdir} all"
       git <project> build all
 
     Note that an alias will prevent ``run`` from invoking the command so in the
-    above example we could not invoke the build as such:
+    above example we could not invoke the build as such::
 
       git <project> run all
 
     In this way we may use the same <name> for different registered run aliases,
-    which can be convenient:
+    which can be convenient::
 
       git <project> build all
       git <project> check all
@@ -126,52 +126,53 @@ class RunPlugin(Plugin):
     value itself contains a substitution string, it will be replaced as well.
     There are a few special case substitutions.  The {git_workdir} key will be
     replaced by the absolute path to the root of the current workarea.  The
-    {branch} key will be replaced by the currently-active branch nme.  In
+    {branch} key will be replaced by the currently-active branch name.  In
     addition the {run} (or {build}, etc. aliases) will be replaced by their
-    names.  Again, an example will make this more clear:
+    names.  Again, an example will make this more clear::
 
-      git <project> config cmd "make -C {git_workdir} BLDDIR=/path/to/{build}
-      {build}" git project add build all "{cmd}" git project add build some
-      "{cmd}"
+      git <project> config cmd \
+          "make -C {git_workdir} BLDDIR=/path/to/{build} {build}"
+      git project add build all "{cmd}"
+      git project add build some "{cmd}"
 
     We have configured two different build flavors, each which place build
     results in separate directories and invoke different targets.  Substitution
-    proceeds as follows:
+    proceeds as follows::
 
       git project build all -> make -C /cur/workarea BLDDIR=/path/to/all all
       git project build some -> make -C /cur/workarea BLDDIR=/path/to/some some
 
     Extra options passed to the run command may be referenced in the command
-    string:
+    string::
 
       git project add build extra "echo {options}"
       git project build extra hello world! -> echo hello world!
 
-    Individual options may also be referenced:
+    Individual options may also be referenced::
 
       git project add build extra "echo {options_1} {options_0}"
       git project build extra hello world! -> echo world! hello
 
     A special dash-separated "key" string composed of option values may be
-    generated:
+    generated::
 
       git project add build any "make {option_key}"
       git project build any target debug -> make target-debug
 
     A special {option_keysep} substitution will result in a - if there are
-    options and the empty string otherwisa:
+    options and the empty string otherwise::
 
-      git project add build build any "make my{option_keysep}{option_key}"
+      git project add build any "make my{option_keysep}{option_key}"
       git project build any target debug -> make my-target-debug
       git project build any -> make my
 
-    Other substitutions may be used in options:
+    Other substitutions may be used in options::
 
       git project add build branch "make {options}"
       git project build branch {branch} -> make dev  # On the dev branch
 
     A special substitution {option_names} is a space-separated list of option
-    values with no additional substitutions:
+    values with no additional substitutions::
 
       git project add build branch "make {option_names} {options}"
       git project build branch {branch} -> make branch dev  # On the dev branch

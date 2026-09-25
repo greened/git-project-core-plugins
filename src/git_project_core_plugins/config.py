@@ -81,21 +81,21 @@ class ConfigPlugin(Plugin):
     The config command operates much like git's built-in config command, except
     all configuration keys are prefixed with <project>, keeping values under a
     single project namespace.  This is a convenient way to store parameters for
-    other commands.  For example:
+    other commands.  For example::
 
       git <project> config builddir /path/to/build
       git <project> add run build "make BUILDDIR={builddir} all"
 
-    Configuration kays may have their values substituted into other
+    Configuration keys may have their values substituted into other
     configuration values via the {key} specifier.  Special commands like build
-    perform the substitution recursively, so configuration vaalues may contain
+    perform the substitution recursively, so configuration values may contain
     substitutions of other configuration values which themselves contain
     substitutions, and so on.  Importantly, substitution only happens when
     commands are run.  Commands should document whether or not they perform
     substitutions.
 
     A git config ``sub-section`` may be substituted with its identifier.  For
-    example:
+    example::
 
       git <project> worktree add myworktree
       git <project> config builddir /path/to/{worktree}/build
@@ -103,7 +103,16 @@ class ConfigPlugin(Plugin):
     Here, myworktree is the identifier of a specific worktree sub-section.  If
     myworktree is the currently active worktree (that is, the current directory
     is under the myworktree root), then ``myworktree`` will substitute for
-    {woktree}.
+    {worktree}.
+
+    The config command also adds a ``config`` subcommand to every plugin
+    command that manages git config sections, so each one configures its own
+    section through the same interface::
+
+      git <project> build config <name> [<value>]
+
+    A plugin whose sections carry an identifier takes that identifier first,
+    as ``worktree config`` does.
 
     See also::
 

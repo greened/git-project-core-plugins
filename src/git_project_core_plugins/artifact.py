@@ -179,14 +179,14 @@ class ArtifactPlugin(Plugin):
     <path> argument to ``artifact rm`` allows us to remove a single association
     rather than all of them at once.
 
-    For example:
+    For example::
 
       git <project> artifact add worktree.myworktree /path/to/artifact
 
     Presumably, /path/to/artifact is in some way created in association with
     myworktree, for example by the ``run`` command.  When we delete myworktree,
     the artifact association causes /path/to/artifact to also be removed.
-    Substitutions can make artifact associations easier to manage:
+    Substitutions can make artifact associations easier to manage::
 
       git <project> artifact add worktree /path/to/{worktree}/artifact
 
@@ -196,7 +196,7 @@ class ArtifactPlugin(Plugin):
     will cause the worktree's name to be substituted into the artifact path,
     forming a unique artifact path to remove.
 
-    We may make this even more general:
+    We may make this even more general::
 
       git <project> config srcdir "{path}"
       git <project> config builddir "{srcdir}/build/{worktree}"
@@ -211,39 +211,9 @@ class ArtifactPlugin(Plugin):
     all of our different build types.  When we delete the worktree, all
     artifacts related to debug, release and check builds will also be removed.
 
-    The worktree plugin also modifies the clone and init commands, adding a
-    --worktree option to both.  With --worktree, clone will create a ``worktree
-    layout`` as so:
-
-      clonedir
-        .git
-         master
-
-    Here, ``master`` is a worktree created from the master branch.  ``clonedir``
-    becames a bare repository, though with refspecs that make it operate like a
-    regular clone for fetch and push operations.  That is, the cloned repository
-    will still have refs/heads and refs/remotes namespaces.
-
-    With --worktree, init will take an existing local clone and convert it to a
-    bare repository, removing all checked out files and creating a master
-    worktree:
-
-      clonedir
-        .git
-         master
-
-    Conversion will abort if the workarea is not in a clean state.  Note that
-    all files in clonedir will be deleted so if there are important files not
-    part of the underlying repository, the user must take care to preserve them.
-    If the workarea hd a branch other than master checked out, no worktree for
-    it will be created automatically, though the user may easily create one
-    after conversion.
-
     See also::
 
-      clone
       config
-      init
       run
       worktree
 

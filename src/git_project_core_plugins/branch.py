@@ -160,7 +160,7 @@ class BranchPlugin(Plugin):
     The branch status command checks the given <refish> (or all local branches
     with the --all option) against the project-configured branches.  The command
     outputs a table of branches and whether they are merged to a project branch
-    and/or pushed to a remote.  For example:
+    and/or pushed to a remote.  For example::
 
       git <project> config --add branch release
       git <project> branch status mybranch
@@ -174,7 +174,7 @@ class BranchPlugin(Plugin):
     will ask whether mybranch should be deleted.  If the user indicates yes,
     both the local mybranch and its remote counterpart, if any, will be deleted.
 
-    With --force, branches will be pruneed regardless of merge/push status.
+    With --force, branches will be pruned regardless of merge/push status.
     With --no-ask branch prune operates in batch mode, assuming all merged and
     pushed branches should be pruned.  With --keep-remote-branch, only the local
     branch is deleted and the remote counterpart is left in place.  This is the

@@ -189,14 +189,14 @@ class HelpPlugin(Plugin):
       git <project> add help [--manpage] <subsection> <text>
       git <project> help <command>
 
-    Users may add help to any project config section.  For example:
+    Users may add help to any project config section.  For example::
 
       git <project> add help run.build "Perform a build"
       git <project> add help run.check "Run tests"
 
     All help is stored under a <project>.help config sub-section.  If a command
     supports it, such help may appear in the command's own help output by
-    querying the appropriate <project>.help sub-section:
+    querying the appropriate <project>.help sub-section::
 
       git <project> run --help
 

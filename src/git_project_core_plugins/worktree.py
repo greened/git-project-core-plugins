@@ -325,8 +325,7 @@ class WorktreePlugin(Plugin):
       git <project> worktree add [-b <branch>] <name-or-path> [<committish>]
       git <project> worktree rm [-f] [--keep-branch] [--keep-remote-branch]
                                 <name-or-path>
-      git <project> worktree config <key> [<value>]
-      git <project> worktree config [--unset] <key> [<value>]
+      git <project> worktree config <ident> [--add] [--unset] <name> [<value>]
 
     ``worktree add`` creates a new git worktree named via <name-or-path> with
     <committish> checked out.  If we pass -b <branch> we'll get a new branch at
@@ -340,16 +339,24 @@ class WorktreePlugin(Plugin):
     identically) to the branches they reference, though it is not strictly
     necessary to do so.
 
+    ``worktree rm`` removes a worktree, along with its workarea and its
+    associated build and install trees.  The branch is deleted too, locally and
+    on every remote, unless a flag says otherwise: ``--keep-branch`` leaves the
+    branch alone everywhere, and ``--keep-remote-branch`` deletes only the
+    local copy.  A branch the project configures is never deleted, whatever the
+    flags say.  Removing a worktree whose branch is unmerged requires ``-f``,
+    unless ``--keep-branch`` means the branch survives anyway.
+
     The key idea behind project worktrees is that they are connected to various
-    ``artifacts.``  Worktrees are managed together with this artifacts to
+    ``artifacts``.  Worktrees are managed together with these artifacts to
     provide a project-level view of various tasks.  For example, a ``run``
     command can create artifacts associated with a worktree.  Removing the
-    worktree implicitly removes thee artifacts, making build cleanups easy and
+    worktree implicitly removes these artifacts, making build cleanups easy and
     convenient.  Commands may use the {worktree} substitution to create
-    worktree-unique artifacts.  Other substitutions may also referece {worktree}
-    in a recursive manner.
+    worktree-unique artifacts.  Other substitutions may also reference
+    {worktree} in a recursive manner.
 
-    Here is a concrete example:
+    Here is a concrete example::
 
       git <project> config srcdir "{path}"
       git <project> config builddir "{srcdir}/build/{worktree}"
@@ -359,14 +366,14 @@ class WorktreePlugin(Plugin):
 
     Assuming the build system uses BUILDDIR to determine where build artifacts
     go, each worktree will get a unique set of build artifacts, via the
-    {builddir} and, recursively., {worktree} substitutions.  When we delete the
-    worktree, we'll also delete the associoated build directory.
+    {builddir} and, recursively, {worktree} substitutions.  When we delete the
+    worktree, we'll also delete the associated build directory.
 
     We associate artifacts with worktrees via the artifact commands.
 
     Another important benefit of worktrees and associated builds is that
     switching to work on a new worktree (by simply editing sources in a
-    different worktree directory) will not result in build artifacts from thte
+    different worktree directory) will not result in build artifacts from the
     previous worktree being overwritten.  Thus we avoid the ``rebuild the
     world`` problems of switching branches within the same workarea.  Generally,
     each created branch will have its own worktree and we will rarely, if ever,
@@ -374,16 +381,41 @@ class WorktreePlugin(Plugin):
 
     A worktree layers a config scope on top of the global project scope, so that
     configuring a key in the worktree with the same name as a key in the project
-    will cause the worktree key's value to override the project key's value:
+    will cause the worktree key's value to override the project key's value::
 
       git <project> config buildwidth 16
-      git <project> worktree config buildwidth 32
+      git <project> worktree config myworktree buildwidth 32
+
+    The worktree to configure is named explicitly, so myworktree gets
+    buildwidth=32 while the project keeps 16.
 
     If we are in a worktree configured with buildwidth=32, then wherever
-    {buildwidth} apeears (say, in a run command), the value 32 will be
+    {buildwidth} appears (say, in a run command), the value 32 will be
     substituted instead of 16.  If we are outside the worktree (for example a
     worktree without a buildwidth configured), then {buildwidth} will be
     substituted with 16.
+
+    The worktree plugin also adds a --worktree option to the clone and init
+    commands.  Both set up the ``worktree layout`` described in the package
+    documentation.  The bare repository is a hidden child directory named for
+    the last component of the remote url, such as ``.myrepo.git``.  The
+    top-level directory holds it alongside the worktrees.
+
+    ``clone --worktree`` clones bare, then rewrites the fetch refspec and sets
+    the main branch to track its remote branch, so fetch and pull behave as
+    they do in a regular clone.  The refs/heads and refs/remotes namespaces
+    remain, and every other local branch is deleted.  Add ``--bare`` to skip
+    that rewrite and keep a plain bare clone.
+
+    ``init --worktree`` converts an existing clone in place.  The workarea must
+    be clean.  The conversion deletes every file in the top-level directory
+    except the git directory, so preserve anything there that is not part of
+    the repository.  Only the main branch gets a worktree, so a different
+    checked-out branch gets none, though one is easy to add afterward.
+
+    On a repository that is already bare, ``init --worktree`` deletes nothing.
+    It refuses to run while a branch other than the main one exists, because it
+    cannot know which remote each branch should go to.
 
     See also::
 
@@ -450,7 +482,7 @@ class WorktreePlugin(Plugin):
                                                         'add',
                                                         'worktree-add',
                                                         help='Create a worktree',
-                                                        epilog='One of path or committish is required.  If only one is specifiedd, the other will be inferred from the specified value.')
+                                                        epilog='One of path or committish is required.  If only one is specified, the other will be inferred from the specified value.')
 
         worktree_add_parser.set_defaults(func=command_worktree_add)
 
