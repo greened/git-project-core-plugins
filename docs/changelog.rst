@@ -31,38 +31,47 @@ ChangeLog
 `Unreleased`_
 -------------
 
-`0.0.26`_ - 2026-09-15
+`0.0.26`_ - 2026-09-27
 ----------------------
 Added
 .....
 - ``worktree rm`` takes ``--keep-branch`` and ``--keep-remote-branch``. It
-  previously always pruned the worktree's branch, locally and from every
-  project remote, so retiring a worktree destroyed its branch.
-  ``--keep-branch`` skips the prune entirely and supersedes
-  ``--keep-remote-branch``.
+  previously pruned the worktree's branch, locally and from every project
+  remote, unless the project configured that branch, so retiring a worktree
+  destroyed its branch. ``--keep-branch`` skips the prune entirely and
+  supersedes ``--keep-remote-branch``.
 - ``branch prune`` takes ``--keep-remote-branch``, the same option
   ``worktree rm`` takes. It matters more here, because ``branch prune`` acts on
   every branch matching the pattern.
 
 Changed
 .......
-- git-project 0.0.38 or later is now required. ``Worktree.rm`` passes
-  ``keep_remote_branch`` unconditionally, so against an older git-project even
-  a plain ``worktree rm`` raises ``TypeError``.
+- git-project 0.0.38 or later is now required. ``worktree rm`` and
+  ``branch prune`` both pass ``keep_remote_branch``, which older versions do
+  not accept, so pruning a branch raises ``TypeError``.
 - Python 3.10 or later is now required, matching git-project.
-- The module docstring is now the single source for this package's
-  documentation. ``docs/intro.rst`` pulls it in with ``automodule`` and the
-  PyPI description is built from it, so the command reference reaches both
-  instead of neither.
+- The docstrings are now the single source for this package's documentation.
+  The command reference is generated from the plugin classes, and both the
+  Sphinx docs and the PyPI description are built from the module docstring
+  and that reference. This release is the first to publish them, which meant
+  making them render: command blocks were quoted prose rather than literal
+  text, and one wrapped synopsis was an outright error.
 
 Fixed
 .....
 - ``branch prune`` without ``--no-ask``, which is the interactive path and the
   default, raised ``NameError``. The module never imported ``sys``, which
   ``query_yes_no`` uses, so that path had never worked.
-- ``worktree rm`` no longer demands ``-f`` for an unmerged branch under
-  ``--keep-branch``. The branch survives there both locally and on every
-  remote, so its merge state cannot cost anything.
+- ``git <project> help <command>`` showed wrong text. The ``worktree config``
+  synopsis omitted the identifier the command takes first, so the documented
+  form could not work. A ``run`` example repeated a word and could not be
+  pasted. A third of the ``artifact`` description was about the worktree
+  plugin.
+- The worktree plugin's description said nothing about ``worktree rm``
+  deleting the branch. It now states that default and its exception.
+- The Issues and Documentation links on the PyPI project page both returned
+  404. Issues named ``unknown/greened``, a leftover from hatch's project
+  template, and Documentation misspelled the package name.
 
 .. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.26...HEAD
 .. _0.0.26: https://github.com/greened/git-project-core-plugins/compare/v0.0.25...v0.0.26
