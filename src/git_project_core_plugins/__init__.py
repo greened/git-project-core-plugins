@@ -57,6 +57,7 @@ specific layout::
 
   <path>
     .<name>.git
+    .git
     worktree1
     worktree2
     worktree3
@@ -64,7 +65,10 @@ specific layout::
 That is, either a bare clone is done, or an existing clone is converted to a
 bare clone via ``git <project> init --worktree``.  The bare repository is the
 hidden ``.<name>.git`` child, named for the last component of the remote url,
-and ``<path>`` holds it alongside the worktrees.  Any conversion will abort if
+and ``<path>`` holds it alongside the worktrees. The ``.git`` beside it is a
+file holding ``gitdir: .<name>.git``, so git works from ``<path>`` too. It is
+a file, not a directory or a symlink, because a go build run from ``<path>``
+fails if ``.git`` resolves to a directory there. Any conversion will abort if
 the worktree is dirty.  Typically, an ordinary ``git clone`` is followed
 immediately by ``git <project> init --worktree``.
 
@@ -108,7 +112,8 @@ Adding custom commands
   git <project> run --make-alias build
   git <project> run --make-alias install
 
-  git <project> add configure debug "cd {builddir} && "
+  git <project> add configure debug "mkdir -p {builddir} && cd {builddir} && cmake -DCMAKE_BUILD_TYPE=Debug {srcdir}"
+  git <project> configure debug
 """
 
 from .artifact import Artifact, ArtifactPlugin

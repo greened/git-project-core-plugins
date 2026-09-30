@@ -30,6 +30,12 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Fixed
+.....
+- The package description now shows the ``.git`` file that ``clone
+  --worktree`` and ``init --worktree`` write, and says why it is a file.
+- The last example in the package description stopped partway through a
+  command. It now shows a whole ``configure`` command and how to run it.
 
 `0.0.27`_ - 2026-09-30
 ----------------------
