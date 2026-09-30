@@ -612,6 +612,17 @@ class WorktreePlugin(Plugin):
 
                 return '.' + urlname
 
+            # Without this the container is not a repository, so anything
+            # that stands there and asks git a question gets nothing. It
+            # has to be a file. A symlink or a directory named ".git"
+            # brings back the go problem the hidden name avoids, because
+            # go's VCS search follows a ".git" that resolves to a
+            # directory and then runs "git status" against a bare clone.
+            # Go walks past a ".git" file, while git and pygit2 honour it.
+            def write_container_gitdir(container: Path, gitdir_name: str):
+                # Keep the pointer relative so the container still moves.
+                (container / '.git').write_text(f'gitdir: {gitdir_name}\n')
+
             def worktree_command_clone(p_git, p_gitproject, p_project, clargs):
                 if clargs.worktree:
                     path = Path.cwd()
@@ -639,6 +650,8 @@ class WorktreePlugin(Plugin):
 
                     if not main:
                         main = self._choose_main_branch(p_git)
+
+                    write_container_gitdir(Path(path).parent, Path(path).name)
 
                     # Detach HEAD so we can worktree main.
                     p_git.detach_head()
@@ -713,6 +726,12 @@ class WorktreePlugin(Plugin):
                         p_git.reinit(newgitdir)
                         assert Path(p_git.get_gitdir()) == newgitdir
                         p_git.validate_config()
+
+                        # After the reinit, so discovery resolves the clone
+                        # the same way it did before. The already-bare path
+                        # below keeps its .git as the clone itself, so only
+                        # the renamed case gets a pointer.
+                        write_container_gitdir(workarea_root, newgitdir.name)
 
                     if was_bare:
                         workarea_root = Path(p_git.get_gitdir()).parent

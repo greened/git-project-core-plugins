@@ -27,6 +27,7 @@ import common
 import io
 import os
 from pathlib import Path
+import pygit2
 
 def test_worktree_add_arguments(reset_directory,
                                 git,
@@ -177,6 +178,17 @@ def test_worktree_scope(reset_directory,
     assert project.committish == 'master'
     assert project.builddir == '/path/to/test'
 
+def check_container_gitdir(container, hidden):
+    """Assert the container points at the hidden clone with a .git file.
+
+    It has to be a file. A directory or a symlink named .git is what
+    breaks a go build run from the container, which is the whole reason
+    the clone is hidden in the first place.
+    """
+    gitfile = Path(container) / '.git'
+    assert gitfile.is_file()
+    assert gitfile.read_text() == f'gitdir: {hidden}\n'
+
 def test_worktree_clone(git_project_runner,
                         remote_repository):
     repo_path = Path(f'.{Path(remote_repository.path).name}.git')
@@ -189,6 +201,8 @@ def test_worktree_clone(git_project_runner,
 
     assert os.path.exists(repo_path)
     assert os.path.exists('master')
+
+    check_container_gitdir(Path.cwd(), repo_path.name)
 
 def test_worktree_clone_bare(git_project_runner,
                              remote_repository):
@@ -204,9 +218,12 @@ def test_worktree_clone_bare(git_project_runner,
     assert os.path.exists(repo_path)
     assert os.path.exists('master')
 
+    check_container_gitdir(Path.cwd(), repo_path.name)
+
 def test_worktree_clone_path(git_project_runner,
                              remote_repository):
     repo_path = Path.cwd() / 'foo' / 'bar'
+    hidden = f'.{Path(remote_repository.path).name}.git'
 
     git_project_runner.run('.*',
                            '',
@@ -215,10 +232,33 @@ def test_worktree_clone_path(git_project_runner,
                            remote_repository.path,
                            str(repo_path))
 
-    assert os.path.exists(
-        str(repo_path / f'.{Path(remote_repository.path).name}.git')
-    )
+    assert os.path.exists(str(repo_path / hidden))
     assert os.path.exists(repo_path / 'master')
+
+    check_container_gitdir(repo_path, hidden)
+
+def test_worktree_clone_container_is_discoverable(git_project_runner,
+                                                  remote_repository):
+    """Standing in the container has to answer, since that is the point."""
+    git_project_runner.run('.*',
+                           '',
+                           'clone',
+                           '--worktree',
+                           remote_repository.path)
+
+    hidden = f'.{Path(remote_repository.path).name}.git'
+    container = Path.cwd()
+
+    # pygit2 reaches the clone through the pointer file.
+    found = pygit2.discover_repository(str(container))
+    assert found is not None
+    assert Path(found).resolve() == (container / hidden).resolve()
+
+    # So does git-project's own view, which is what consumers use.
+    os.chdir(container)
+    git = git_project.Git()
+    assert git.has_repo()
+    assert git.is_bare_repository()
 
 def test_worktree_init(git,
                        git_project_runner,
@@ -248,10 +288,13 @@ def test_worktree_init(git,
                            'init',
                            '--worktree')
 
-    assert os.path.exists(workarea / f'.{Path(clone_url).parent.name}.git')
-    assert not os.path.exists(workarea / '.git')
+    hidden = f'.{Path(clone_url).parent.name}.git'
+
+    assert os.path.exists(workarea / hidden)
     assert not os.path.exists(workarea / 'MergedRemote.txt')
     assert os.path.exists(workarea / 'master')
+
+    check_container_gitdir(workarea, hidden)
 
 def test_worktree_init_nonclean(git,
                                 git_project_runner):
@@ -312,7 +355,7 @@ def test_worktree_init_main(git,
                            '--worktree')
 
     assert os.path.exists(workarea / f'.{Path(clone_url).parent.name}.git')
-    assert not os.path.exists(workarea / '.git')
+    check_container_gitdir(workarea, f'.{Path(clone_url).parent.name}.git')
     assert not os.path.exists(workarea / 'MergedRemote.txt')
     assert os.path.exists(workarea / 'main')
 
@@ -347,7 +390,7 @@ def test_worktree_init_main_master(git,
                            '--worktree')
 
     assert os.path.exists(workarea / f'.{Path(clone_url).parent.name}.git')
-    assert not os.path.exists(workarea / '.git')
+    check_container_gitdir(workarea, f'.{Path(clone_url).parent.name}.git')
     assert not os.path.exists(workarea / 'MergedRemote.txt')
     # Prefer main over master.
     assert not os.path.exists(workarea / 'master')
@@ -386,7 +429,7 @@ def test_worktree_init_nomain(git,
                            '--worktree')
 
     assert os.path.exists(workarea / f'.{Path(clone_url).parent.name}.git')
-    assert not os.path.exists(workarea / '.git')
+    check_container_gitdir(workarea, f'.{Path(clone_url).parent.name}.git')
     assert not os.path.exists(workarea / 'MergedRemote.txt')
     assert not os.path.exists(workarea / 'master')
     assert os.path.exists(workarea / 'newmain')
@@ -428,7 +471,7 @@ def test_worktree_init_nomain_multi(git,
                            stdin=io.StringIO('newmain'))
 
     assert os.path.exists(workarea / f'.{Path(clone_url).parent.name}.git')
-    assert not os.path.exists(workarea / '.git')
+    check_container_gitdir(workarea, f'.{Path(clone_url).parent.name}.git')
     assert not os.path.exists(workarea / 'MergedRemote.txt')
     assert not os.path.exists(workarea / 'master')
     assert os.path.exists(workarea / 'newmain')

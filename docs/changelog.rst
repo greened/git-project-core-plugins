@@ -30,6 +30,22 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Fixed
+.....
+- ``clone --worktree`` and ``init --worktree`` now write a ``.git`` file
+  beside the hidden bare clone, holding ``gitdir: .<urlname>.git``. The
+  container was not a repository before, so any tool that stood there and
+  asked git a question got nothing, and callers worked around it by reaching
+  for ``common_dir`` themselves.
+
+  It has to be a file. The hidden name exists because a go build run from the
+  container fails when a ``.git`` that resolves to a directory sits above the
+  module, since go then runs ``git status`` against the bare clone. A symlink
+  resolves to a directory and fails the same way. Go walks past a ``.git``
+  file, while git and pygit2 follow it, so a file serves both.
+
+  A repository that was already bare when ``init --worktree`` ran keeps its
+  ``.git`` as the clone itself and gets no pointer.
 
 `0.0.26`_ - 2026-09-27
 ----------------------
