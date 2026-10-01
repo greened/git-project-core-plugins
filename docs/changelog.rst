@@ -32,6 +32,13 @@ ChangeLog
 -------------
 Fixed
 .....
+- Removing a config object removed its artifacts with ``rm -rf`` through a
+  shell, so a path that held a space deleted the wrong directories. A path
+  with ``a b`` in it removed ``a`` and ``b`` instead. Artifacts are now
+  removed without a shell. A leading ``~`` and ``$VAR`` references are
+  still expanded. A path that exists is taken literally, and otherwise it is
+  expanded as a glob, as before. A variable that is not set is now left as
+  written, where the shell made it empty.
 - The package description now shows the ``.git`` file that ``clone
   --worktree`` and ``init --worktree`` write, and says why it is a file.
 - The last example in the package description stopped partway through a

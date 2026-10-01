@@ -237,3 +237,124 @@ def test_artifact_rm_substitution(git_project_runner,
     obj.rm()
 
     assert not tempdir.exists()
+
+def test_artifact_rm_path_with_space(git_project_runner,
+                                     git,
+                                     project):
+    workdir = Path(git.get_working_copy_root())
+
+    git_project_runner.chdir(workdir)
+
+    target = workdir / 'has space'
+    target.mkdir()
+    (target / 'file').write_text('x')
+
+    # A shell would split the path into these two and remove them.
+    (workdir / 'has').mkdir()
+    (workdir / 'space').mkdir()
+
+    git_project_runner.run('.*',
+                           '',
+                           'artifact',
+                           'add',
+                           'myconfigobject',
+                           f'{target}')
+
+    git.reload_config()
+
+    obj = MyConfigObject.get(git, project.get_section(), 'test')
+    obj.rm()
+
+    assert not target.exists()
+    assert (workdir / 'has').exists()
+    assert (workdir / 'space').exists()
+
+def test_artifact_rm_glob(git_project_runner,
+                          git,
+                          project,
+                          monkeypatch):
+    workdir = Path(git.get_working_copy_root())
+
+    git_project_runner.chdir(workdir)
+    # rm runs in this process, so the relative pattern resolves here.
+    monkeypatch.chdir(workdir)
+
+    out = workdir / 'out'
+    out.mkdir()
+    (out / 'a.o').write_text('x')
+    (out / 'b.o').write_text('x')
+    (out / 'keep.c').write_text('x')
+
+    git_project_runner.run('.*',
+                           '',
+                           'artifact',
+                           'add',
+                           'myconfigobject',
+                           # Relative, because pytest's directory names hold
+                           # '[' and ']', which are glob characters too.
+                           'out/*.o')
+
+    git.reload_config()
+
+    obj = MyConfigObject.get(git, project.get_section(), 'test')
+    obj.rm()
+
+    assert not (out / 'a.o').exists()
+    assert not (out / 'b.o').exists()
+    assert (out / 'keep.c').exists()
+
+def test_artifact_remove_empty_path_removes_nothing(tmp_path, monkeypatch):
+    from git_project_core_plugins.artifact import remove_artifact_path
+
+    (tmp_path / 'keep').write_text('x')
+    monkeypatch.chdir(tmp_path)
+
+    remove_artifact_path('')
+
+    assert (tmp_path / 'keep').exists()
+
+def test_artifact_remove_expands_home_and_vars(tmp_path, monkeypatch):
+    from git_project_core_plugins.artifact import remove_artifact_path
+
+    monkeypatch.setenv('HOME', str(tmp_path))
+    monkeypatch.setenv('ARTIFACT_TEST_DIR', 'viavar')
+    (tmp_path / 'viahome').mkdir()
+    (tmp_path / 'viavar').mkdir()
+
+    remove_artifact_path('~/viahome')
+    remove_artifact_path(f'{tmp_path}/$ARTIFACT_TEST_DIR')
+
+    assert not (tmp_path / 'viahome').exists()
+    assert not (tmp_path / 'viavar').exists()
+
+def test_artifact_remove_unset_var_stays_literal(tmp_path, monkeypatch):
+    from git_project_core_plugins.artifact import remove_artifact_path
+
+    # The shell made an unset variable empty, so $UNSET/keep meant /keep.
+    monkeypatch.delenv('ARTIFACT_TEST_UNSET', raising=False)
+    (tmp_path / 'keep').mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    remove_artifact_path('$ARTIFACT_TEST_UNSET/keep')
+
+    assert (tmp_path / 'keep').exists()
+
+def test_artifact_remove_symlinks_removes_only_the_link(tmp_path, monkeypatch):
+    from git_project_core_plugins.artifact import remove_artifact_path
+
+    monkeypatch.chdir(tmp_path)
+
+    # A link that points at itself. resolve() raises on it.
+    os.symlink('loop', tmp_path / 'loop')
+
+    target = tmp_path / 'target'
+    target.mkdir()
+    (target / 'file').write_text('x')
+    os.symlink(target, tmp_path / 'link')
+
+    remove_artifact_path(str(tmp_path / 'loop'))
+    remove_artifact_path(str(tmp_path / 'link'))
+
+    assert not os.path.lexists(tmp_path / 'loop')
+    assert not os.path.lexists(tmp_path / 'link')
+    assert (target / 'file').exists()

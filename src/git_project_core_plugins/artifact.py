@@ -26,12 +26,57 @@ git-project config <key> [--unset] [<value>]
 """
 
 from git_project import ConfigObject, SubstitutableConfigObject, Plugin
-from git_project import run_command_with_shell, add_top_level_command
+from git_project import GitProjectException, add_top_level_command
 
 from git_project_core_plugins.common import add_plugin_version_argument
 
 import argparse
+import glob
+import os
+from pathlib import Path
 import re
+import shlex
+import shutil
+
+def remove_artifact_path(fullpath):
+    """Remove the file or directory at fullpath, as rm -rf would, without a shell.
+
+    A leading ~ and $VAR references are expanded first, as the shell did. A
+    variable that is not set is left as written, where the shell made it
+    empty. A path that exists is then removed as written, so spaces and glob
+    characters in it are literal. Otherwise it is expanded as a glob, and
+    each match is removed. A symbolic link is removed, not its target. An
+    empty path removes nothing. Removing the root directory raises
+    GitProjectException.
+
+    """
+    if not fullpath:
+        return
+
+    fullpath = os.path.expandvars(os.path.expanduser(fullpath))
+
+    if os.path.lexists(fullpath):
+        paths = [fullpath]
+    else:
+        paths = sorted(glob.glob(fullpath))
+
+    for path in paths:
+        # Removing a link never touches its target, so a link needs no root
+        # check. resolve() would also raise on a link that loops.
+        if os.path.islink(path):
+            print(f'rm -rf {shlex.quote(path)}')
+            os.remove(path)
+            continue
+
+        if Path(path).resolve() == Path('/'):
+            raise GitProjectException(f'Refusing to remove {path}')
+
+        print(f'rm -rf {shlex.quote(path)}')
+
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
 
 class Artifact(SubstitutableConfigObject):
     @classmethod
@@ -300,8 +345,7 @@ the final git config section that will hold the artifact path.
             if artifact:
                 for path in artifact.iter_multival('itempath'):
                     fullpath = artifact.substitute_value(self._git, project, path)
-                    run_command_with_shell(f'rm -rf {fullpath}',
-                                           show_command=True)
+                    remove_artifact_path(fullpath)
 
             config_object_rm(self)
 
