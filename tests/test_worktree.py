@@ -874,3 +874,46 @@ def test_worktree_rm_in_workarea(git, git_project_runner, tmp_path_factory):
                            'test_rm_workarea')
 
     assert not os.path.exists(workarea / 'test_rm_workarea')
+
+def test_worktree_rm_refused_artifact_removes_nothing(git,
+                                                      git_project_runner,
+                                                      tmp_path_factory):
+    workarea = git.get_working_copy_root()
+
+    os.chdir(workarea)
+    git = git_project.Git()  # Reinitialize in new workarea.
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run('.*',
+                           '',
+                           'worktree',
+                           'add',
+                           '../user/test_guard',
+                           'master')
+
+    worktree_path = workarea.parent / 'user' / 'test_guard'
+    assert os.path.exists(worktree_path)
+
+    # The main workarea is protected, so removing it is refused.
+    git_project_runner.run('.*',
+                           '',
+                           'artifact',
+                           'add',
+                           'worktree.test_guard',
+                           str(workarea))
+
+    git_project_runner.expect_fail = True
+    git_project_runner.run('Refusing to remove',
+                           '',
+                           'worktree',
+                           'rm',
+                           'test_guard')
+    git_project_runner.expect_fail = False
+
+    # The refusal comes before anything is destroyed.
+    git = git_project.Git()
+    assert os.path.exists(worktree_path)
+    assert git.committish_exists('user/test_guard')
+    assert git_project.ConfigObject.exists(git, 'project', 'worktree',
+                                           'test_guard')
+    assert os.path.exists(workarea / 'MergedRemote.txt')

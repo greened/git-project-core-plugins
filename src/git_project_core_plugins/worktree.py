@@ -288,16 +288,28 @@ class Worktree(ScopedConfigObject):
         place on every remote.  Implied by keep_branch.
 
         """
+        # Read what the steps below need first, because removing the config
+        # section also removes these attributes.
+        path = self.path
+        trees = [getattr(self, name, None)
+                 for name in ('builddir', 'prefix', 'installdir')]
+        ident = self.get_ident()
+        committish = self.committish
+
+        # Remove the config section first. An artifact hook on rm may refuse a
+        # path, and it must do so before the workarea or branch is gone.
+        super().rm()
+        self._pathsection.rm()
+
         # TODO: Use python utils.
         try:
-            shutil.rmtree(self.path)
-            shutil.rmtree(self.builddir)
-            shutil.rmtree(self.prefix)
-            shutil.rmtree(self.installdir)
+            shutil.rmtree(path)
+            for tree in trees:
+                shutil.rmtree(tree)
         except:
             pass
 
-        self._git.prune_worktree(self.get_ident())
+        self._git.prune_worktree(ident)
 
         project = Project.get(self._git, self._project_section)
 
@@ -306,15 +318,12 @@ class Worktree(ScopedConfigObject):
                 if branch not in self._git.iterbranches():
                     continue
                 branch_name = self._git.committish_to_refname(branch)
-                committish_name = self._git.committish_to_refname(self.committish)
+                committish_name = self._git.committish_to_refname(committish)
                 if branch_name == committish_name:
                     break
             else:
-                project.prune_branch(self.committish,
+                project.prune_branch(committish,
                                      keep_remote_branch=keep_remote_branch)
-
-        self._pathsection.rm()
-        super().rm()
 
 class WorktreePlugin(Plugin):
     """
