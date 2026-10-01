@@ -242,3 +242,43 @@ refs/heads/merged_remote                     merged
     assert not git.committish_exists('merged_remote')
     assert not git.committish_exists('refs/heads/merged_remote')
     assert not git.committish_exists('refs/remotes/origin/merged_remote')
+
+def test_branch_status_target(reset_directory,
+                              git,
+                              gitproject,
+                              project,
+                              parser_manager,
+                              plugin_manager,
+                              capsys):
+    plugin = BranchPlugin()
+
+    plugin.add_arguments(git,
+                         gitproject,
+                         project,
+                         parser_manager,
+                         plugin_manager)
+
+    branch_status_parser = parser_manager.find_parser('branch-status')
+
+    command_branch_status = branch_status_parser.get_default('func')
+
+    clargs = {
+        'name_or_ref': None,
+        'all_user': False,
+        'all': True,
+        'target': 'master',
+    }
+
+    command_branch_status(git,
+                          gitproject,
+                          project,
+                          common.AttrDict(clargs))
+
+    lines = {line.split()[0]: line.split()[1]
+             for line in capsys.readouterr().out.splitlines()
+             if line.startswith('refs/heads/')}
+
+    # With a target, merged means merged to that branch.
+    assert lines['refs/heads/master'] == 'yes'
+    assert lines['refs/heads/unmerged'] == 'no'
+    assert lines['refs/heads/notpushed'] == 'no'

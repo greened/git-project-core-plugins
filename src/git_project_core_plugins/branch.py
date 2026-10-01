@@ -100,7 +100,7 @@ def command_branch_status(git, gitproject, project, clargs):
     for branch in git.iterrefnames([ref]):
         merge_status = 'no'
         if target:
-            merge_status = 'yes' if git.branch_is_merged(branch, target) else 'no'
+            merge_status = 'yes' if git.refname_is_merged(branch, target) else 'no'
         else:
             merge_status = 'yes' if project.branch_is_merged(branch) else 'no'
 

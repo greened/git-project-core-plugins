@@ -38,6 +38,9 @@ Changed
 
 Fixed
 .....
+- ``branch status <pattern> <target>`` failed with an ``AttributeError``. It
+  called a ``Git`` method that does not exist. It now reports whether each
+  branch is merged to <target>.
 - Removing a config object removed its artifacts with ``rm -rf`` through a
   shell, so a path that held a space deleted the wrong directories. A path
   with ``a b`` in it removed ``a`` and ``b`` instead. Artifacts are now
