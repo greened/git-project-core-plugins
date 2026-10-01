@@ -203,21 +203,6 @@ class Artifact(SubstitutableConfigObject):
     def get_managing_command(cls):
         return 'artifact'
 
-    def rm(self, git, project, clargs, string):
-        """Remove the paths associated with this Artifact.
-
-        git: An object to query the repository and make config changes.
-
-        project: The currently active Project.
-
-        clargs: Command-line arguments
-
-        string: The string on which to perform substitution.
-
-        """
-        for path in self.iter_multival('itempath'):
-            path = self.substitute_value(git, poject, clargs, path)
-
 def command_artifact_add(git, gitproject, project, clargs):
     """Implement git-project artifact add."""
     ident = clargs.subsection
@@ -349,7 +334,7 @@ the final git config section that will hold the artifact path.
                                               argparse.RawDescriptionHelpFormatter)
 
         rm_parser.add_argument('subsection',
-                               help='Subsection under which to add the artifact')
+                               help='Subsection the artifact was added under')
         rm_parser.add_argument('path', nargs='?',
                                help='Artifact path, may use substitutions')
 

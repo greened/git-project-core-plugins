@@ -433,3 +433,15 @@ def test_artifact_remove_resolves_relative_common_dir(tmp_path, monkeypatch):
     with pytest.raises(GitProjectException, match='Refusing to remove'):
         remove_artifact_path(str(common_dir), git)
     assert common_dir.exists()
+
+def test_artifact_object_rm(reset_directory, git, project):
+    from git_project_core_plugins.artifact import Artifact
+
+    artifact = Artifact.get(git, project.get_section(), 'gone',
+                            itempath='{builddir}')
+    assert Artifact.exists(git, project.get_section(), 'gone')
+
+    # rm takes no arguments, as it does for every config object.
+    artifact.rm()
+
+    assert not Artifact.exists(git, project.get_section(), 'gone')
