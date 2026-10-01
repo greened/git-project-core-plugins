@@ -38,6 +38,9 @@ Changed
 
 Fixed
 .....
+- ``worktree add`` with no path ended in a Python traceback, and its help
+  said a missing path would be inferred. The path is now a required
+  argument, so a missing one gives a usage error.
 - ``rm run <name>``, and ``rm`` for any run alias, failed with a
   ``NameError`` and never removed anything. It also took no name when no
   runs were defined. It now removes the named run, and an unknown name is an

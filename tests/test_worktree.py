@@ -917,3 +917,15 @@ def test_worktree_rm_refused_artifact_removes_nothing(git,
     assert git_project.ConfigObject.exists(git, 'project', 'worktree',
                                            'test_guard')
     assert os.path.exists(workarea / 'MergedRemote.txt')
+
+def test_worktree_add_requires_path(git, git_project_runner):
+    workarea = git.get_working_copy_root()
+
+    git_project_runner.chdir(workarea)
+
+    # A usage error, not a traceback.
+    git_project_runner.expect_fail = True
+    git_project_runner.run('',
+                           'the following arguments are required: path',
+                           'worktree',
+                           'add')

@@ -62,12 +62,13 @@ def normalize_path(git, path):
 def get_name_branch_path_and_refname(git, gp, clargs):
     """Given a Project and worktree command-line arguments <name-or-path> and
     <committish>, determine an appropriate worktree name, a branch for the
-    worktree, a path based on the name and refname based on the name.  If one or
-    the other of <name-or-path> or <committish> is not provided, figure it out
-    from the provided value.  If neither <name-or-path> nor <committish> is
-    provided, raise an exception.
+    worktree, a path based on the name and refname based on the name. The
+    path is required. With no <committish>, the refname is HEAD's.
 
     """
+    if not getattr(clargs, 'path', None):
+        raise GitProjectException('worktree add requires a path')
+
     name = str(Path(clargs.path).name)
     branch = name
     # If the path is not absolute, try creating a branch named as a subpath,
@@ -491,12 +492,11 @@ class WorktreePlugin(Plugin):
                                                         'add',
                                                         'worktree-add',
                                                         help='Create a worktree',
-                                                        epilog='One of path or committish is required.  If only one is specified, the other will be inferred from the specified value.')
+                                                        epilog='The path is required. The committish defaults to HEAD.')
 
         worktree_add_parser.set_defaults(func=command_worktree_add)
 
         worktree_add_parser.add_argument('path',
-                                         nargs='?',
                                          help='Path for worktree checkout')
         worktree_add_parser.add_argument('committish',
                                          nargs='?',
