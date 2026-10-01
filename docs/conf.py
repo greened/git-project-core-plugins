@@ -29,14 +29,16 @@
 project = 'git-project-core-plugins'
 copyright = '2024, David A. Greene'
 author = 'David A. Greene'
-release = '0.0.19'
+import importlib.metadata
+
+release = importlib.metadata.version('git-project-core-plugins')
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ['sphinx.ext.extlinks', 'sphinx.ext.autodoc']
+autodoc_member_order = 'bysource'
 
-templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 
@@ -45,7 +47,6 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'alabaster'
-html_static_path = ['_static']
 
 
 # -- Options for extlinks -------------------------------------------------

@@ -128,7 +128,7 @@ dependencies = [
   "sphinx>=7",
 ]
 [tool.hatch.envs.docs.scripts]
-build = "sphinx-build -M html docs docs/_build"
+build = "sphinx-build -M html docs docs/_build -W --keep-going"
 clean = "sphinx-build -M clean docs docs/_build"
 
 [tool.black]
