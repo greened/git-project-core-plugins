@@ -30,6 +30,12 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Changed
+.......
+- Removing a config object now refuses to remove an artifact path that is,
+  or contains, the root, the home directory, the working copy or the git
+  common dir. A glob that matches one of them removes nothing at all.
+
 Fixed
 .....
 - Removing a config object removed its artifacts with ``rm -rf`` through a

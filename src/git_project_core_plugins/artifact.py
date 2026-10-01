@@ -38,7 +38,27 @@ import re
 import shlex
 import shutil
 
-def remove_artifact_path(fullpath):
+def _protected_paths(git):
+    """Return the resolved paths that an artifact removal must not remove or
+    contain: the root, the home directory and, inside a repository, the
+    working copy and the git common dir. Protecting the common dir also
+    protects a worktree container, which holds it.
+
+    """
+    protected = [Path('/'), Path.home()]
+    if git is not None and git.has_repo():
+        workdir = git.get_working_copy_root()
+        if workdir:
+            protected.append(Path(workdir))
+        # A worktree's commondir file may hold a relative path, which git
+        # reads relative to the worktree's own gitdir, not the cwd.
+        common_dir = Path(git.get_git_common_dir())
+        if not common_dir.is_absolute():
+            common_dir = Path(git.get_gitdir()) / common_dir
+        protected.append(common_dir)
+    return [path.resolve() for path in protected]
+
+def remove_artifact_path(fullpath, git=None):
     """Remove the file or directory at fullpath, as rm -rf would, without a shell.
 
     A leading ~ and $VAR references are expanded first, as the shell did. A
@@ -46,8 +66,12 @@ def remove_artifact_path(fullpath):
     empty. A path that exists is then removed as written, so spaces and glob
     characters in it are literal. Otherwise it is expanded as a glob, and
     each match is removed. A symbolic link is removed, not its target. An
-    empty path removes nothing. Removing the root directory raises
-    GitProjectException.
+    empty path removes nothing.
+
+    A match that is a protected path, or that contains one, raises
+    GitProjectException before anything is removed. The protected paths are
+    the root, the home directory and, when git is given, the working copy
+    and the git common dir.
 
     """
     if not fullpath:
@@ -60,18 +84,27 @@ def remove_artifact_path(fullpath):
     else:
         paths = sorted(glob.glob(fullpath))
 
+    protected = _protected_paths(git)
+
+    # Check every match before removing any, so a glob that reaches a
+    # protected path removes nothing at all. Removing a link never touches
+    # its target, so a link needs no check. resolve() would also raise on a
+    # link that loops.
     for path in paths:
-        # Removing a link never touches its target, so a link needs no root
-        # check. resolve() would also raise on a link that loops.
         if os.path.islink(path):
-            print(f'rm -rf {shlex.quote(path)}')
+            continue
+        resolved = Path(path).resolve()
+        for guard in protected:
+            if guard == resolved or guard.is_relative_to(resolved):
+                raise GitProjectException(
+                    f'Refusing to remove {path}: it is or contains {guard}')
+
+    for path in paths:
+        print(f'rm -rf {shlex.quote(path)}')
+
+        if os.path.islink(path):
             os.remove(path)
             continue
-
-        if Path(path).resolve() == Path('/'):
-            raise GitProjectException(f'Refusing to remove {path}')
-
-        print(f'rm -rf {shlex.quote(path)}')
 
         if os.path.isdir(path):
             shutil.rmtree(path)
@@ -345,7 +378,7 @@ the final git config section that will hold the artifact path.
             if artifact:
                 for path in artifact.iter_multival('itempath'):
                     fullpath = artifact.substitute_value(self._git, project, path)
-                    remove_artifact_path(fullpath)
+                    remove_artifact_path(fullpath, self._git)
 
             config_object_rm(self)
 

@@ -27,6 +27,7 @@ from git_project_core_plugins import Artifact, ArtifactPlugin
 import common
 
 import os
+import pytest
 from pathlib import Path
 
 class MyConfigObject(ConfigObject):
@@ -358,3 +359,77 @@ def test_artifact_remove_symlinks_removes_only_the_link(tmp_path, monkeypatch):
     assert not os.path.lexists(tmp_path / 'loop')
     assert not os.path.lexists(tmp_path / 'link')
     assert (target / 'file').exists()
+
+class _GuardGit:
+    """Just enough of Git to name a working copy, a gitdir and a common dir."""
+    def __init__(self, workdir, common_dir, gitdir=None):
+        self.workdir = workdir
+        self.common_dir = common_dir
+        self.gitdir = gitdir if gitdir is not None else common_dir
+
+    def has_repo(self):
+        return True
+
+    def get_working_copy_root(self):
+        return str(self.workdir)
+
+    def get_gitdir(self):
+        return str(self.gitdir)
+
+    def get_git_common_dir(self):
+        return str(self.common_dir)
+
+def test_artifact_remove_refuses_protected_paths(tmp_path, monkeypatch):
+    from git_project import GitProjectException
+    from git_project_core_plugins.artifact import remove_artifact_path
+
+    container = tmp_path / 'container'
+    common_dir = container / '.proj.git'
+    workdir = container / 'main'
+    home = tmp_path / 'home'
+    for d in (common_dir, workdir / 'build', home / 'cache'):
+        d.mkdir(parents=True)
+    monkeypatch.setenv('HOME', str(home))
+    git = _GuardGit(workdir, common_dir)
+
+    # Each of these is a protected path or contains one.
+    for path in (workdir, container, common_dir, home, tmp_path):
+        with pytest.raises(GitProjectException, match='Refusing to remove'):
+            remove_artifact_path(str(path), git)
+        assert path.exists()
+
+    # A glob that matches a protected path is refused too, and removes
+    # nothing, not even the matches that sort before the protected one.
+    (container / 'aaa').mkdir()
+    with pytest.raises(GitProjectException, match='Refusing to remove'):
+        remove_artifact_path(f'{container}/*', git)
+    assert workdir.exists()
+    assert (container / 'aaa').exists()
+
+    # Inside a protected path is fine.
+    remove_artifact_path(str(workdir / 'build'), git)
+    remove_artifact_path(str(home / 'cache'), git)
+    assert not (workdir / 'build').exists()
+    assert not (home / 'cache').exists()
+
+def test_artifact_remove_resolves_relative_common_dir(tmp_path, monkeypatch):
+    from git_project import GitProjectException
+    from git_project_core_plugins.artifact import remove_artifact_path
+
+    # Plain git worktree add writes a relative commondir, which git reads
+    # relative to the worktree's own gitdir.
+    container = tmp_path / 'container'
+    common_dir = container / '.proj.git'
+    gitdir = common_dir / 'worktrees' / 'main'
+    workdir = container / 'main'
+    elsewhere = tmp_path / 'elsewhere'
+    for d in (gitdir, workdir, elsewhere):
+        d.mkdir(parents=True)
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    # From here '../..' means tmp_path's parent, not the common dir.
+    monkeypatch.chdir(elsewhere)
+    git = _GuardGit(workdir, '../..', gitdir)
+
+    with pytest.raises(GitProjectException, match='Refusing to remove'):
+        remove_artifact_path(str(common_dir), git)
+    assert common_dir.exists()
