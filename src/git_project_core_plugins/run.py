@@ -344,16 +344,19 @@ class RunPlugin(Plugin):
 
         def command_rm_run(git, gitproject, project, clargs):
             f"""Implement git-project rm {alias}"""
-            run = Run.get(git, project, alias, clargs.name, command=clargs.command)
+            if clargs.name not in project.iter_multival(alias):
+                raise GitProjectException(f'No {alias} named {clargs.name}')
+            run = Class.get(git, project, clargs.name)
             run.rm()
             print(f'Removing project {alias} {clargs.name}')
             project.rm_item(alias, clargs.name)
 
         rm_run_parser.set_defaults(func=command_rm_run)
 
-        if runs:
-            rm_run_parser.add_argument('name', choices=runs,
-                                       help='Command name')
+        # Offer the names as choices when there are some. The argument is
+        # needed either way, or the command has no name to remove.
+        rm_run_parser.add_argument('name', choices=runs if runs else None,
+                                   help='Command name')
 
         # run
         command_subparser = parser_manager.find_subparser('command')

@@ -38,6 +38,10 @@ Changed
 
 Fixed
 .....
+- ``rm run <name>``, and ``rm`` for any run alias, failed with a
+  ``NameError`` and never removed anything. It also took no name when no
+  runs were defined. It now removes the named run, and an unknown name is an
+  error.
 - ``branch status <pattern> <target>`` failed with an ``AttributeError``. It
   called a ``Git`` method that does not exist. It now reports whether each
   branch is merged to <target>.

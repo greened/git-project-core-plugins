@@ -468,3 +468,34 @@ def test_run_substitute_option_positions(git_project_runner,
                            'test',
                            '{branch}',
                            'foo')
+
+def test_run_rm(git_project_runner,
+                git):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*',
+                           '',
+                           'add',
+                           'run',
+                           'gone',
+                           'echo gone')
+
+    git_project_runner.run('Removing project run gone',
+                           '',
+                           'rm',
+                           'run',
+                           'gone')
+
+    git.reload_config()
+    project = git_project.Project.get(git, 'project')
+    assert 'gone' not in list(project.iter_multival('run'))
+    assert not git_project.ConfigObject.exists(git, 'project', 'run', 'gone')
+
+    # Running it now fails, because it is no longer a run.
+    git_project_runner.expect_fail = True
+    git_project_runner.run('.*',
+                           '.*',
+                           'run',
+                           'gone')
