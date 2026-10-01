@@ -20,8 +20,8 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-"""A plugin to add an 'init' command to git-project.  The init command does
-initialization of a workarea,
+"""A plugin to add an 'init' command to git-project. Plugins add options to
+init, such as the worktree plugin's --worktree.
 
 Summary:
 
@@ -47,10 +47,13 @@ class InitPlugin(Plugin):
 
       git <project> init
 
-    Basic config entries are added to name the project and default branches.
-    Plugins may add options to enhance functionality.  For example the worktree
-    command adds a --worktree option to convert an existing local clone to a
-    ``worktree layout``.
+    init itself changes nothing. Any command run in a repository sets the
+    project's ``branch`` to the main branch and its ``remote`` to origin,
+    when they are not set already.
+
+    Plugins add options to init. For example the worktree command adds a
+    --worktree option to convert an existing local clone to a ``worktree
+    layout``.
 
     See also::
 

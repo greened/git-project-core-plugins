@@ -20,12 +20,12 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-"""A plugin to add a 'config' command to git-project.  The config command sets
+"""A plugin to add a 'config' command to git-project. The config command sets
 project-wide git configuration values and prints their values to stdout.
 
 Summary:
 
-git-project config <key> [--unset] [<value>]
+git-project config [--add] [--unset] <name> [<value>]
 
 """
 
@@ -86,33 +86,20 @@ class ConfigPlugin(Plugin):
       git <project> config builddir /path/to/build
       git <project> add run build "make BUILDDIR={builddir} all"
 
-    Configuration keys may have their values substituted into other
-    configuration values via the {key} specifier.  Special commands like build
-    perform the substitution recursively, so configuration values may contain
-    substitutions of other configuration values which themselves contain
-    substitutions, and so on.  Importantly, substitution only happens when
-    commands are run.  Commands should document whether or not they perform
-    substitutions.
+    A value may name other values as ``{name}``. The commands that use a value,
+    such as run, substitute it when they run, not when it is set. For example,
+    inside a worktree ``{worktree}`` is that worktree's name::
 
-    A git config ``sub-section`` may be substituted with its identifier.  For
-    example::
-
-      git <project> worktree add myworktree
       git <project> config builddir /path/to/{worktree}/build
 
-    Here, myworktree is the identifier of a specific worktree sub-section.  If
-    myworktree is the currently active worktree (that is, the current directory
-    is under the myworktree root), then ``myworktree`` will substitute for
-    {worktree}.
+    The Substitution and Scopes sections of the git-project documentation
+    describe the names and how a worktree's values override the project's:
+    https://pypi.org/project/git-project/
 
-    The config command also adds a ``config`` subcommand to every plugin
-    command that manages git config sections, so each one configures its own
-    section through the same interface::
+    The config command also adds a ``config`` subcommand to worktree, which
+    sets a value for one worktree and takes that worktree's name first::
 
-      git <project> build config <name> [<value>]
-
-    A plugin whose sections carry an identifier takes that identifier first,
-    as ``worktree config`` does.
+      git <project> worktree config <ident> <name> [<value>]
 
     See also::
 

@@ -32,6 +32,11 @@ ChangeLog
 -------------
 Changed
 .......
+- The command manuals that ``git <project> help <command>`` shows are
+  corrected against the code. Several synopses named options that do not
+  exist or left out required arguments, and ``artifact`` showed the
+  ``config`` plugin's description. The package description now links to
+  git-project's Substitution and Scopes sections rather than repeating them.
 - Removing a config object now refuses to remove an artifact path that is,
   or contains, the root, the home directory, the working copy or the git
   common dir. A glob that matches one of them removes nothing at all.

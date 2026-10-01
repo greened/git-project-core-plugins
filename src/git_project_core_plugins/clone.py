@@ -20,12 +20,12 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-"""A plugin to add a 'clone' command to git-project.  The clone command clones a
-repository and optionally initializes a master worktree environment.
+"""A plugin to add a 'clone' command to git-project. The clone command clones a
+repository. The worktree plugin adds a --worktree option to it.
 
 Summary:
 
-git-project clone <url> [path] [--bare] [--no-master-worktree]
+git-project clone [--bare] <url> [<path>]
 
 """
 
@@ -54,10 +54,14 @@ class ClonePlugin(Plugin):
 
       git <project> clone <url> [<path>] [--bare]
 
-    By itself clone has just the very basic functionality of the built-in git
-    clone command.  Plugins may add options to give the clone command more
-    features.  For example, the worktree command adds a --worktree option to
-    have clone create a ``worktree layout``.
+    By itself clone does a basic clone, then sets the project's defaults in
+    the new repository. With no <path> it clones into the last component of
+    <url> under the current directory, keeping any ``.git`` suffix, where
+    ``git clone`` drops it. It offers no ssh key, so an ssh url fails to
+    authenticate.
+
+    Plugins add options to clone. For example, the worktree command adds a
+    --worktree option to have clone create a ``worktree layout``.
 
     See also::
 

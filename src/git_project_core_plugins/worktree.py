@@ -32,14 +32,11 @@ from pathlib import Path
 import shutil
 import urllib
 
-# Take a path and normalize it to the current working directory.  If the current
-# directory is a bare repository, place this path inside it.  If not, place this
-# path outside it.
 def normalize_path(git, path):
-    """Find an appropriate repository-relative path.  Given a path, if it is not an
-    absolute path, place it in the current directory if the repository is a bare
-    repository or place it one level above the repository root directory if it
-    is not a bare repository.
+    """Find an appropriate repository-relative path. A relative path that does
+    not start with '..' is placed under the current directory in a bare
+    repository, and under the root of the current working copy otherwise. A
+    path that starts with '..' is resolved from the current directory.
 
     path: A string path
 
@@ -47,8 +44,8 @@ def normalize_path(git, path):
     path = Path(path).expanduser()
 
     if not path.is_absolute() and path.parts[0] != '..':
-        # If this is a bare repository, put this in a directory below it.
-        # Otherwise put it in the directory above it.
+        # In a bare repository, put it under the current directory.
+        # Otherwise put it under the root of the current working copy.
         if git.is_bare_repository():
             path = Path.cwd() / path
         else:
@@ -334,24 +331,33 @@ class WorktreePlugin(Plugin):
 
       git <project> worktree add [-b <branch>] <name-or-path> [<committish>]
       git <project> worktree rm [-f] [--keep-branch] [--keep-remote-branch]
-                                <name-or-path>
+                                <name>
       git <project> worktree config <ident> [--add] [--unset] <name> [<value>]
 
-    ``worktree add`` creates a new git worktree named via <name-or-path> with
-    <committish> checked out.  If we pass -b <branch> we'll get a new branch at
-    HEAD or <committish> if it is given.  The worktree name is either the given
-    name or if name-or-path is a path, the worktree name will be the same as the
-    last path component.  If <name-or-path> is a simple name with no directory
-    separators, the worktree will be created as a sub-directory of the current
-    directory.
+    ``worktree add`` creates a worktree at <name-or-path> and checks out a
+    branch in it. The worktree's name is the last component of <name-or-path>.
+    The branch is named after <name-or-path>: a simple name gives a branch of
+    that name, and a relative path such as ``../user/topic`` gives
+    ``user/topic``, the part after any ``..``. That branch is created at
+    <committish>, or at HEAD, when it does not exist yet. An existing branch is
+    checked out as it is, and <committish> is then ignored. With -b <branch>,
+    the new branch <branch> is created at <committish> or HEAD and checked out
+    instead.
+
+    A relative path that does not start with ``..`` is placed under the root of
+    the current worktree, or under the current directory in a bare repository.
+    A path that starts with ``..`` is taken from the current directory. So
+    ``worktree add ../topic``, run in the main worktree, puts the new worktree
+    beside it, and ``worktree add topic`` puts it inside.
 
     To keep things simple, we'll usually always name worktrees similarly (or
     identically) to the branches they reference, though it is not strictly
     necessary to do so.
 
-    ``worktree rm`` removes a worktree, along with its workarea and its
-    associated build and install trees.  The branch is deleted too, locally and
-    on every remote, unless a flag says otherwise: ``--keep-branch`` leaves the
+    ``worktree rm`` removes a worktree and its workarea. It first removes the
+    paths that ``artifact`` associates with the worktree, and if one of those is
+    refused, nothing is removed. The branch is deleted too, locally and on each
+    project remote, unless a flag says otherwise: ``--keep-branch`` leaves the
     branch alone everywhere, and ``--keep-remote-branch`` deletes only the
     local copy.  A branch the project configures is never deleted, whatever the
     flags say.  Removing a worktree whose branch is unmerged requires ``-f``,
@@ -399,11 +405,11 @@ class WorktreePlugin(Plugin):
     The worktree to configure is named explicitly, so myworktree gets
     buildwidth=32 while the project keeps 16.
 
-    If we are in a worktree configured with buildwidth=32, then wherever
-    {buildwidth} appears (say, in a run command), the value 32 will be
-    substituted instead of 16.  If we are outside the worktree (for example a
-    worktree without a buildwidth configured), then {buildwidth} will be
-    substituted with 16.
+    Inside myworktree, wherever {buildwidth} appears (say, in a run command),
+    32 is substituted instead of 16. Outside myworktree, or in a worktree with
+    no buildwidth of its own, {buildwidth} gives 16. The Scopes section of the
+    git-project documentation describes the rule:
+    https://pypi.org/project/git-project/
 
     The worktree plugin also adds a --worktree option to the clone and init
     commands.  Both set up the ``worktree layout`` described in the package
@@ -414,8 +420,10 @@ class WorktreePlugin(Plugin):
     ``clone --worktree`` clones bare, then rewrites the fetch refspec and sets
     the main branch to track its remote branch, so fetch and pull behave as
     they do in a regular clone.  The refs/heads and refs/remotes namespaces
-    remain, and every other local branch is deleted.  Add ``--bare`` to skip
-    that rewrite and keep a plain bare clone.
+    remain, and every other local branch is deleted. Add ``--bare`` to skip
+    the refspec rewrite. The clone still gets the ``.git`` file and the main
+    worktree. With no <path>, ``clone --worktree`` uses the current directory
+    itself as the top-level directory, where a plain clone makes a new one.
 
     ``init --worktree`` converts an existing clone in place.  The workarea must
     be clean.  The conversion deletes every file in the top-level directory

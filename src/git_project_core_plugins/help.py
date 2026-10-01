@@ -20,12 +20,12 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-"""A plugin to add a 'help' command to git-project.  The help command looks up
-help text in the gitconfig and displays it.
+"""A plugin to add a 'help' command to git-project. The help command displays a
+command's built-in manual, or help text stored in the git config.
 
 Summary:
 
-git-project help [command] [options...]
+git-project help [<command> | <section>... <name>]
 
 """
 
@@ -187,9 +187,15 @@ class HelpPlugin(Plugin):
     Summary::
 
       git <project> add help [--manpage] <subsection> <text>
-      git <project> help <command>
+      git <project> rm help [--manpage] <subsection>
+      git <project> help [<command> | <section>... <name>]
 
-    Users may add help to any project config section.  For example::
+    With no argument, help shows git-project's general help. ``help
+    <command>`` shows the command's manual. ``help <section>... <name>``
+    shows the manpage stored for that subsection, so ``help run build``
+    shows the one stored for ``run.build``.
+
+    Users may add help to any project config section. For example::
 
       git <project> add help run.build "Perform a build"
       git <project> add help run.check "Run tests"
@@ -202,8 +208,9 @@ class HelpPlugin(Plugin):
 
       <standard help text>
 
-      build     -- Perform a build
-      check     -- Run tests
+      Available runs:
+          check                - Run tests
+          build                - Perform a build
 
     In this way projects can self-document their configurations.  Normally
     <text> is stored in <project>.help.<subsection>.short.  With --manpage,

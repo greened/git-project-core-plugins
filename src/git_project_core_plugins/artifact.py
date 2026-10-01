@@ -16,12 +16,14 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-"""A plugin to add a 'config' command to git-project.  The config command sets
-project-wide git configuration values and prints their values to stdout.
+"""A plugin to add an 'artifact' command to git-project. The artifact command
+associates file-system paths with git config sections, so that removing a
+section also removes its paths.
 
 Summary:
 
-git-project config <key> [--unset] [<value>]
+git-project artifact add <subsection> <path>
+git-project artifact rm <subsection> [<path>]
 
 """
 
@@ -237,18 +239,26 @@ class ArtifactPlugin(Plugin):
     <project>.artifact section.  Artifacts look up objects associated with
     <subsection> and perform substitutions on paths to yield the final
     associated file-system object.  The ``artifact rm`` command simply removes
-    an artifact association, it does not remove the artifact itself.  Multiple
-    artifact paths may be associated under a single <subsection> and the option
-    <path> argument to ``artifact rm`` allows us to remove a single association
-    rather than all of them at once.
+    an artifact association, it does not remove the artifact itself. A
+    <subsection> may hold several paths. With <path>, ``artifact rm`` removes
+    only that association. Give <path> as it was added, before substitution.
 
     For example::
 
       git <project> artifact add worktree.myworktree /path/to/artifact
 
     Presumably, /path/to/artifact is in some way created in association with
-    myworktree, for example by the ``run`` command.  When we delete myworktree,
+    myworktree, for example by the ``run`` command. When we delete myworktree,
     the artifact association causes /path/to/artifact to also be removed.
+
+    Removal runs without a shell. A leading ~ and $VAR references are expanded.
+    A path that exists is removed as written. Otherwise it is expanded as a glob,
+    and each match is removed. A symbolic link is removed, not its target.
+
+    Removal refuses the root, the home directory, the current worktree and the
+    repository's git directory, and any directory that contains one of them. A
+    refused path stops the command before anything is removed.
+
     Substitutions can make artifact associations easier to manage::
 
       git <project> artifact add worktree /path/to/{worktree}/artifact
@@ -257,7 +267,9 @@ class ArtifactPlugin(Plugin):
     subsection instead of naming a worktree explicitly as before.  Because the
     {worktree} substitution appears in the artifact path, deleting any worktree
     will cause the worktree's name to be substituted into the artifact path,
-    forming a unique artifact path to remove.
+    forming a unique artifact path to remove. If a worktree also has its own
+    ``worktree.<name>`` artifact, removing that worktree uses only its own, not
+    the general one.
 
     We may make this even more general::
 

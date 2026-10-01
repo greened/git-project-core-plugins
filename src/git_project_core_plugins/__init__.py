@@ -68,8 +68,10 @@ hidden ``.<name>.git`` child, named for the last component of the remote url,
 and ``<path>`` holds it alongside the worktrees. The ``.git`` beside it is a
 file holding ``gitdir: .<name>.git``, so git works from ``<path>`` too. It is
 a file, not a directory or a symlink, because a go build run from ``<path>``
-fails if ``.git`` resolves to a directory there. Any conversion will abort if
-the worktree is dirty.  Typically, an ordinary ``git clone`` is followed
+fails if ``.git`` resolves to a directory there. A repository that is already
+bare when ``init --worktree`` runs keeps its name and gets no ``.git`` file,
+and its parent directory holds the worktrees. Any conversion will abort if
+the worktree is dirty. Typically, an ordinary ``git clone`` is followed
 immediately by ``git <project> init --worktree``.
 
 Either route also creates a worktree for the project's main branch, so the
@@ -95,13 +97,17 @@ Initial setup
 Add convenience substitution variables
 --------------------------------------
 
-Configured values may reference other configured values by name, and
-``{worktree}`` names the active worktree.  So a build directory written once
-gives every worktree its own::
+Configured values may name other configured values. Inside a worktree,
+``{path}`` is the worktree's path and ``{worktree}`` is its name. So a build
+directory written once gives every worktree its own::
 
   git <project> config srcdir "{path}"
   git <project> config builddir "{srcdir}/build/{worktree}"
   git <project> config make "make -C {srcdir} BUILDDIR={builddir} {build}"
+
+The Substitution and Scopes sections of the git-project documentation
+describe the names, and how a worktree's values override the project's:
+https://pypi.org/project/git-project/
 
 Adding custom commands
 ----------------------

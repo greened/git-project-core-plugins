@@ -20,14 +20,14 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-"""A plugin to add a 'branch' command to git-project.  The branch command allows
-query of branch status with respect to the project and pruning of 'finished'
+"""A plugin to add a 'branch' command to git-project. The branch command
+reports branch status against the project's branches and prunes finished
 branches.
 
 Summary:
 
-git-project branch status [<pattern>]
-git-project branch prune [--no-ask] [--keep-remote-branch] [<pattern>]
+git-project branch status (--all | --all-user | <pattern>) [<target>]
+git-project branch prune [--force] [--no-ask] [--keep-remote-branch] (--all-user | <pattern>)
 
 """
 from git_project import Git, RunnableConfigObject, Plugin
@@ -149,41 +149,45 @@ def command_branch_prune(git, gitproject, project, clargs):
 
 class BranchPlugin(Plugin):
     """
-    The branch command queries the status of branches against known project
-    branches and provides methods to prune old branches.
+    The branch command queries the status of branches against the project's
+    branches and prunes branches that are finished.
 
     Summary::
 
-      git <project> branch status [--all] [<refish>]
-      git <project> branch prune [--force] [--no-ask] [--keep-remote-branch]
+      git <project> branch status (--all | --all-user | <pattern>) [<target>]
+      git <project> branch prune [--force] [--no-ask] [--keep-remote-branch] (--all-user | <pattern>)
 
-    The branch status command checks the given <refish> (or all local branches
-    with the --all option) against the project-configured branches.  The command
-    outputs a table of branches and whether they are merged to a project branch
-    and/or pushed to a remote.  For example::
+    A <pattern> matches every branch whose name starts with it, and a name
+    without ``refs/`` is looked up under ``refs/heads/``. --all-user matches
+    the branches under ``user/<login>``.
+
+    branch status prints a table of the matching branches, with whether each
+    is merged to a project branch and whether it is pushed to a project
+    remote. --all reports on every local branch. With <target>, merged means
+    merged to <target> instead. For example::
 
       git <project> config --add branch release
       git <project> branch status mybranch
 
-    The report will show whether mybranch is merged to the release or master
-    branches (master is always a configured project branch) and whether the
-    commit pointed to mybranch is pushed to a remote.
+    The project branch defaults to the repository's main branch, main or
+    master, when none is configured. config --add adds more.
 
-    The branch prune command computes the same information and if the branch is
-    merged to a project branch and that project branch is pushed to a remote,
-    will ask whether mybranch should be deleted.  If the user indicates yes,
-    both the local mybranch and its remote counterpart, if any, will be deleted.
+    branch prune asks whether to delete each matching branch that is merged
+    to a project branch, locally or on a project remote. If the answer is
+    yes, it deletes the local branch and its copy on each project remote.
+    A pattern matches project branches too, so check the list before you
+    answer.
 
-    With --force, branches will be pruned regardless of merge/push status.
-    With --no-ask branch prune operates in batch mode, assuming all merged and
-    pushed branches should be pruned.  With --keep-remote-branch, only the local
-    branch is deleted and the remote counterpart is left in place.  This is the
-    same option worktree rm takes, and it matters more here, because branch prune
-    acts on every branch matching the pattern.
+    With --force, branch prune offers every matching branch, merged or not.
+    With --no-ask, it deletes without asking. With --keep-remote-branch, it
+    deletes only the local branch and leaves the remote copies in place.
+    worktree rm takes the same option, and it matters more here, because
+    branch prune acts on every branch that matches the pattern.
 
     See also::
 
       config
+      worktree
 
     """
     def __init__(self):
