@@ -695,8 +695,20 @@ class WorktreePlugin(Plugin):
                 path = command_init(p_git, p_gitproject, p_project, clargs)
 
                 if clargs.worktree:
-                    main = self._choose_main_branch(p_git)
                     was_bare = p_git.is_bare_repository()
+
+                    # A bare repository rewrites origin's refspecs. Otherwise
+                    # the project remote's url names the hidden git directory.
+                    # Check first, so a missing remote changes nothing.
+                    remote = 'origin'
+                    if not was_bare:
+                        remote = next(p_project.iterremotes(), remote)
+                    try:
+                        p_git.get_remote_url(remote)
+                    except KeyError:
+                        raise GitProjectException(f'Cannot initialize worktree layout, no remote named {remote}')
+
+                    main = self._choose_main_branch(p_git)
 
                     # If it's not already, convert the current workarea to a bare repository.
                     if not p_git.is_bare_repository():

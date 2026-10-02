@@ -322,6 +322,24 @@ def test_worktree_init_nonclean(git,
                            'init',
                            '--worktree')
 
+def test_worktree_init_no_remote(git,
+                                 git_project_runner):
+    workarea = git.get_working_copy_root()
+    git._repo.remotes.delete('origin')
+
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.expect_fail = True
+
+    git_project_runner.run('git-project: Cannot initialize worktree layout, no remote named origin',
+                           '',
+                           'init',
+                           '--worktree')
+
+    assert os.path.exists(workarea / 'MergedRemote.txt')
+    assert git_project.Git().config.get_item('core', 'bare') != 'true'
+
 def test_worktree_init_main(git,
                             git_project_runner,
                             tmp_path_factory):

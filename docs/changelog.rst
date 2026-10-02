@@ -49,6 +49,10 @@ Fixed
   ``{options}``, ``{options_N}``, ``{option_names}`` and ``{option_key}`` now
   shell-quote each word, and only a plain ``{name}`` in a word is
   substituted.
+- ``init --worktree`` in a repository with no ``origin`` remote ended in a
+  Python traceback. In a repository that was not bare, it had by then set
+  ``core.bare`` and deleted the files in the workarea. It now checks for the
+  remote first and reports a missing one without changing anything.
 - ``worktree add`` with no path ended in a Python traceback, and its help
   said a missing path would be inferred. The path is now a required
   argument, so a missing one gives a usage error.
