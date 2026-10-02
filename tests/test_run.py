@@ -21,6 +21,7 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 import os
+from pathlib import Path
 import re
 
 import git_project
@@ -499,3 +500,47 @@ def test_run_rm(git_project_runner,
                            '.*',
                            'run',
                            'gone')
+
+def test_run_options_are_not_shell(git_project_runner,
+                                   git):
+    workdir = Path(git.get_working_copy_root())
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*', '', 'add', 'run', 'all',
+                           'echo {options}')
+    git_project_runner.run('.*', '', 'add', 'run', 'one',
+                           'echo {options_0}')
+    git_project_runner.run('.*', '', 'add', 'run', 'key',
+                           'echo x{option_keysep}{option_key}')
+
+    # Each word reaches the command quoted, as one argument, never as shell.
+    # The runner sees the command git-project prints, not the shell's output.
+    git_project_runner.run(re.escape("echo 'a;touch ran_all'"), '.*',
+                           'run', 'all', 'a;touch ran_all')
+    git_project_runner.run(re.escape("echo '$(touch ran_one)'"), '.*',
+                           'run', 'one', '$(touch ran_one)')
+    git_project_runner.run(re.escape("echo x-'k|touch ran_key'"), '.*',
+                           'run', 'key', 'k|touch ran_key')
+
+    for marker in ('ran_all', 'ran_one', 'ran_key'):
+        assert not (workdir / marker).exists()
+
+def test_run_option_braces_are_not_evaluated(git_project_runner,
+                                             git):
+    workdir = Path(git.get_working_copy_root())
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run('.*', '', 'add', 'run', 'all',
+                           'echo {options}')
+
+    # A plain name is still substituted.
+    git_project_runner.run(re.escape('echo master'), '.*',
+                           'run', 'all', '{branch}')
+
+    # Anything else in braces stays text and is never run as Python.
+    code = "{__import__('os').system('touch ran_eval')}"
+    git_project_runner.run('.*', '.*', 'run', 'all', code)
+
+    assert not (workdir / 'ran_eval').exists()

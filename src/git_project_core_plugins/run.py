@@ -32,10 +32,14 @@ git-project run <name> [<option>...]
 
 from git_project import ConfigObject, RunnableConfigObject, Plugin, Project
 from git_project import get_or_add_top_level_command, GitProjectException
+from git_project import run_command_with_shell
 
 from git_project_core_plugins.common import add_plugin_version_argument
 
 import argparse
+import re
+import secrets
+import shlex
 
 class RunConfig(ConfigObject):
     """A ConfigObject to manage run aliases."""
@@ -102,7 +106,10 @@ class RunPlugin(Plugin):
 
     Full shell substitution is supported, as well as config {key} substitution,
     where the text ``{key}`` is replaced by key's value. The command is printed
-    after substitution.
+    after substitution. The words given after <name> on the command line are
+    shell-quoted, so the shell sees each as one argument and never runs it. In
+    those words only a plain {name} is substituted, and other text in braces
+    is passed on as it is.
 
     The add run command associates a command string with a name, and rm run
     removes it. The run command itself invokes the command string via a shell.
@@ -385,22 +392,60 @@ class RunPlugin(Plugin):
 
                 translation_table = dict.fromkeys(map(ord, '{}'), None)
 
-                option_names = ' '.join(clargs.options)
-                option_names = option_names.translate(translation_table)
-                option_key = '-'.join(clargs.options)
-                option_key = option_key.translate(translation_table)
+                # An option may name a value, such as {branch}. Only a plain
+                # {name} is looked up. The substitution evaluates what it is
+                # given as Python, so anything else in braces stays text.
+                def substitute_names(option):
+                    return re.sub(
+                        r'\{([A-Za-z_][A-Za-z0-9_]*)\}',
+                        lambda match: run.substitute_value(
+                            git, project, '{' + match.group(1) + '}', dict()),
+                        option)
+
+                words = [substitute_names(option) for option in clargs.options]
+                names = [option.translate(translation_table)
+                         for option in clargs.options]
+                option_key = '-'.join(names)
+
+                # The command runs through a shell, so each word from the
+                # command line is shell-quoted, or a ';' in one would run as
+                # shell. The quoting cannot go into the substitution itself,
+                # which evaluates every value as a Python f-string that a
+                # quote would break. So a plain placeholder stands in for each
+                # word during substitution, and the quoted word replaces it
+                # afterward.
+                token = secrets.token_hex(8)
+
+                def placeholder(name):
+                    return f'GITPROJECT{token}{name}END'
+
+                quoted = {
+                    placeholder('options'):
+                        ' '.join(shlex.quote(word) for word in words),
+                    placeholder('optionnames'):
+                        ' '.join(shlex.quote(name) for name in names),
+                    placeholder('optionkey'):
+                        shlex.quote(option_key) if option_key else '',
+                }
 
                 formats = {
-                    'options': ' '.join(clargs.options),
-                    'option_names': option_names,
-                    'option_key': option_key,
+                    'options': placeholder('options'),
+                    'option_names': placeholder('optionnames'),
+                    'option_key': placeholder('optionkey'),
                     'option_keysep': '-' if len(clargs.options) > 0 else ''
                 }
 
-                for i, option in enumerate(clargs.options):
-                    formats[f'options_{i}'] = option
+                for i, word in enumerate(words):
+                    formats[f'options_{i}'] = placeholder(f'option{i}')
+                    quoted[placeholder(f'option{i}')] = shlex.quote(word)
 
-                return run.run(git, project, formats)
+                command = run.substitute_command(git, project, formats)
+                for name, value in quoted.items():
+                    command = command.replace(name, value)
+
+                print(command)
+
+                return run_command_with_shell(command)
 
         run_parser.set_defaults(func=command_run)
 

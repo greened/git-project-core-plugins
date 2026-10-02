@@ -43,6 +43,12 @@ Changed
 
 Fixed
 .....
+- The words given to ``run`` and its aliases after the name went into the
+  command unquoted, and the command runs through a shell. So a ``;``,
+  ``|`` or ``$( )`` in one ran as shell, and text in braces ran as Python.
+  ``{options}``, ``{options_N}``, ``{option_names}`` and ``{option_key}`` now
+  shell-quote each word, and only a plain ``{name}`` in a word is
+  substituted.
 - ``worktree add`` with no path ended in a Python traceback, and its help
   said a missing path would be inferred. The path is now a required
   argument, so a missing one gives a usage error.
