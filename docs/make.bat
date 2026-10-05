@@ -13,8 +13,8 @@ REM any later version.
 
 REM This program is distributed in the hope that it will be useful, but WITHOUT
 REM ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-REM FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
-REM more details.
+REM FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License
+REM for more details.
 
 REM You should have received a copy of the GNU Affero General Public License
 REM along with git-project. If not, see <https://www.gnu.org/licenses/>.
