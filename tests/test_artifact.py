@@ -122,7 +122,7 @@ def test_artifact_rm_item(git_project_runner, git):
     )
 
     git_project_runner.run(
-        ".*", "", "artifact", "rm", "worktree", "\\\\{builddir\\\\}"
+        ".*", "", "artifact", "rm", "worktree", "\\{builddir\\}"
     )
 
     check_config_file(

@@ -32,6 +32,11 @@ ChangeLog
 -------------
 Changed
 .......
+- core-plugins now needs git-project 0.0.40 or later. That release passes
+  the value given to ``artifact rm`` or ``config --unset`` to git as one
+  argument. So a path or value that holds a space can be removed. The value
+  is a regular expression, and one escaped twice to get past the old split
+  must now be escaped once.
 - The command manuals that ``git <project> help <command>`` shows are
   corrected against the code. Several synopses named options that do not
   exist or left out required arguments, and ``artifact`` showed the
