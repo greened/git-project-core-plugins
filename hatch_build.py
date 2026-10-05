@@ -47,8 +47,13 @@ def _load_commanddocs():
     installed before it could compute its own metadata.  This module stands
     alone, so load it straight from its path.
     """
-    path = Path(__file__).parent / 'src' / 'git_project_core_plugins' / '_commanddocs.py'
-    spec = importlib.util.spec_from_file_location('_commanddocs', path)
+    path = (
+        Path(__file__).parent
+        / "src"
+        / "git_project_core_plugins"
+        / "_commanddocs.py"
+    )
+    spec = importlib.util.spec_from_file_location("_commanddocs", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -58,11 +63,11 @@ _commanddocs = _load_commanddocs()
 format_reference = _commanddocs.format_reference
 from_source = _commanddocs.from_source
 
-REPO = 'https://github.com/greened/git-project-core-plugins'
+REPO = "https://github.com/greened/git-project-core-plugins"
 
 #: A relative ``target_:path`` link, which PyPI cannot resolve.
-_RELATIVE_LINK = re.compile(r'(.+?)_:((?!https?://)\S+?)')
-_ISSUE_REF = re.compile(r':issue:`(\d+)`')
+_RELATIVE_LINK = re.compile(r"(.+?)_:((?!https?://)\S+?)")
+_ISSUE_REF = re.compile(r":issue:`(\d+)`")
 
 
 class ReadmeMetadataHook(MetadataHookInterface):
@@ -70,26 +75,28 @@ class ReadmeMetadataHook(MetadataHookInterface):
 
     # hatchling loads an in-tree hook only under the reserved name 'custom';
     # any other name has to be an installed plugin.
-    PLUGIN_NAME = 'custom'
+    PLUGIN_NAME = "custom"
 
     def update(self, metadata):
-        package = Path(self.root) / 'src' / 'git_project_core_plugins'
+        package = Path(self.root) / "src" / "git_project_core_plugins"
 
-        prose = ast.get_docstring(ast.parse((package / '__init__.py').read_text()))
+        prose = ast.get_docstring(
+            ast.parse((package / "__init__.py").read_text())
+        )
         reference = format_reference(from_source(package))
 
-        authors = (Path(self.root) / 'docs' / 'authors.rst').read_text()
-        authors = authors[:authors.index('A full list of contributors')]
+        authors = (Path(self.root) / "docs" / "authors.rst").read_text()
+        authors = authors[: authors.index("A full list of contributors")]
 
         # The prose ends in a literal block, so the sections need a blank line
         # between them or the next one unindents into it.  That is an RST error
         # and PyPI rejects a description that fails to render.
-        text = '\n'.join([prose, reference, authors])
+        text = "\n".join([prose, reference, authors])
 
-        text = _RELATIVE_LINK.sub(rf'\1_:{REPO}/tree/main/\g<2>', text)
-        text = _ISSUE_REF.sub(rf'#\1_: {REPO}/issues/\1', text)
+        text = _RELATIVE_LINK.sub(rf"\1_:{REPO}/tree/main/\g<2>", text)
+        text = _ISSUE_REF.sub(rf"#\1_: {REPO}/issues/\1", text)
 
-        metadata['readme'] = {
-            'content-type': 'text/x-rst',
-            'text': text,
+        metadata["readme"] = {
+            "content-type": "text/x-rst",
+            "text": text,
         }

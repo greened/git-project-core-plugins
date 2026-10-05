@@ -21,17 +21,25 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-from git_project import ConfigObject, Git, GitProject, Plugin, Project
-from git_project import ScopedConfigObject
-from git_project import add_top_level_command, GitProjectException
+import argparse
+import os
+import shutil
+import urllib
+from pathlib import Path
+
+from git_project import (
+    ConfigObject,
+    Git,
+    GitProject,
+    GitProjectException,
+    Plugin,
+    Project,
+    ScopedConfigObject,
+    add_top_level_command,
+)
 
 from git_project_core_plugins.common import add_plugin_version_argument
 
-import argparse
-import os
-from pathlib import Path
-import shutil
-import urllib
 
 def normalize_path(git, path):
     """Find an appropriate repository-relative path. A relative path that does
@@ -44,7 +52,7 @@ def normalize_path(git, path):
     """
     path = Path(path).expanduser()
 
-    if not path.is_absolute() and path.parts[0] != '..':
+    if not path.is_absolute() and path.parts[0] != "..":
         # In a bare repository, put it under the current directory.
         # Otherwise put it under the root of the current working copy.
         if git.is_bare_repository():
@@ -56,6 +64,7 @@ def normalize_path(git, path):
 
     return str(path)
 
+
 # Determine a path and committish from args.
 def get_name_branch_path_and_refname(git, gp, clargs):
     """Given a Project and worktree command-line arguments <name-or-path> and
@@ -64,8 +73,8 @@ def get_name_branch_path_and_refname(git, gp, clargs):
     path is required. With no <committish>, the refname is HEAD's.
 
     """
-    if not getattr(clargs, 'path', None):
-        raise GitProjectException('worktree add requires a path')
+    if not getattr(clargs, "path", None):
+        raise GitProjectException("worktree add requires a path")
 
     name = str(Path(clargs.path).name)
     branch = name
@@ -75,16 +84,16 @@ def get_name_branch_path_and_refname(git, gp, clargs):
     if not namepath.is_absolute():
         parts = namepath.parts
         for i, v in enumerate(reversed(parts)):
-            if v == '..':
+            if v == "..":
                 oi = len(parts) - i - 1
-                namepath = Path(parts[oi+1])
-                for i in range(oi+2, len(parts)):
+                namepath = Path(parts[oi + 1])
+                for i in range(oi + 2, len(parts)):
                     namepath = namepath.joinpath(parts[i])
                 break
         branch = str(namepath)
     path = normalize_path(git, clargs.path)
-    refname = git.committish_to_refname('HEAD')
-    if hasattr(clargs, 'committish') and clargs.committish:
+    refname = git.committish_to_refname("HEAD")
+    if hasattr(clargs, "committish") and clargs.committish:
         # A committish may resolve to a commit with no ref (bare SHA);
         # committish_to_refname would fail there, so fall back to the
         # committish itself and let create_branch branch at that commit.
@@ -93,22 +102,25 @@ def get_name_branch_path_and_refname(git, gp, clargs):
 
     return name, branch, path, refname
 
+
 # worktree add
 def command_worktree_add(git, gitproject, project, clargs):
     """Implement git-project worktree add."""
-    name, newbranch, path, refname = get_name_branch_path_and_refname(git,
-                                                                      gitproject,
-                                                                      clargs)
+    name, newbranch, path, refname = get_name_branch_path_and_refname(
+        git, gitproject, clargs
+    )
 
     branch = git.refname_to_branch_name(refname)
     branch_point = refname
 
     if not git.committish_exists(branch_point):
-        raise GitProjectException(f'Branch point {branch_point} does not exist for worktree add')
+        raise GitProjectException(
+            f"Branch point {branch_point} does not exist for worktree add"
+        )
 
     # Either use the branch the user gave us or create a branch (if needed)
     # named after the given name.
-    if hasattr(clargs, 'branch') and clargs.branch:
+    if hasattr(clargs, "branch") and clargs.branch:
         branch = clargs.branch
         git.create_branch(branch, branch_point)
     elif newbranch != branch:
@@ -116,14 +128,11 @@ def command_worktree_add(git, gitproject, project, clargs):
         if not git.committish_exists(branch):
             git.create_branch(branch, branch_point)
 
-    worktree = Worktree.get(git,
-                            project,
-                            name,
-                            path=path,
-                            committish=branch)
+    worktree = Worktree.get(git, project, name, path=path, committish=branch)
     worktree.add()
 
     return worktree
+
 
 def command_worktree_rm(git, gitproject, project, clargs):
     """Implement git-project worktree rm."""
@@ -134,16 +143,24 @@ def command_worktree_rm(git, gitproject, project, clargs):
     # are going to delete the branch.  --keep-branch leaves the branch in place
     # both locally and on remotes, so the merge state cannot cost anything.
     # --keep-remote-branch still deletes the local branch, so it still applies.
-    if (not clargs.keep_branch
+    if (
+        not clargs.keep_branch
         and not project.branch_is_merged(worktree.committish)
-        and not clargs.force):
-        raise GitProjectException(f'Worktree branch {worktree.committish} is not merged, use -f to force')
+        and not clargs.force
+    ):
+        raise GitProjectException(
+            f"Worktree branch {worktree.committish} is not merged, use -f to force"
+        )
 
-    worktree.rm(keep_branch=clargs.keep_branch,
-                keep_remote_branch=clargs.keep_remote_branch)
+    worktree.rm(
+        keep_branch=clargs.keep_branch,
+        keep_remote_branch=clargs.keep_remote_branch,
+    )
+
 
 class Worktree(ScopedConfigObject):
     """A ScopedConfigObject to manage worktree git configs."""
+
     class Path(ConfigObject):
         """A ConfigObject to manage worktree paths.  Each worktree config section has an
         associated worktreepath config section to allow fast mapping from a
@@ -151,12 +168,7 @@ class Worktree(ScopedConfigObject):
 
         """
 
-        def __init__(self,
-                     git,
-                     project_section,
-                     subsection,
-                     ident,
-                     **kwargs):
+        def __init__(self, git, project_section, subsection, ident, **kwargs):
             """Path construction.
 
             cls: The derived class being constructed.
@@ -172,16 +184,12 @@ class Worktree(ScopedConfigObject):
             **kwargs: Keyword arguments of property values to set upon construction.
 
             """
-            super().__init__(git,
-                             project_section,
-                             subsection,
-                             ident,
-                             **kwargs)
+            super().__init__(git, project_section, subsection, ident, **kwargs)
 
         @classmethod
         def subsection(cls):
             """ConfigObject protocol subsection."""
-            return 'worktreepath'
+            return "worktreepath"
 
         @classmethod
         def get(cls, git, project_section, path, **kwargs):
@@ -197,18 +205,11 @@ class Worktree(ScopedConfigObject):
                       construction.
 
             """
-            return super().get(git,
-                               project_section,
-                               cls.subsection(),
-                               path,
-                               **kwargs)
+            return super().get(
+                git, project_section, cls.subsection(), path, **kwargs
+            )
 
-    def __init__(self,
-                 git,
-                 project_section,
-                 subsection,
-                 ident,
-                 **kwargs):
+    def __init__(self, git, project_section, subsection, ident, **kwargs):
         """Worktree construction.
 
         cls: The derived class being constructed.
@@ -224,20 +225,15 @@ class Worktree(ScopedConfigObject):
         **kwargs: Keyword arguments of property values to set upon construction.
 
         """
-        super().__init__(git,
-                         project_section,
-                         subsection,
-                         ident,
-                         **kwargs)
-        self._pathsection = self.Path.get(git,
-                                          project_section,
-                                          self.path,
-                                          worktree=ident)
+        super().__init__(git, project_section, subsection, ident, **kwargs)
+        self._pathsection = self.Path.get(
+            git, project_section, self.path, worktree=ident
+        )
 
     @staticmethod
     def subsection():
         """ConfigObject protocol subsection."""
-        return 'worktree'
+        return "worktree"
 
     @classmethod
     def get(cls, git, project, name, **kwargs):
@@ -252,23 +248,21 @@ class Worktree(ScopedConfigObject):
         name: Name of the worktree to construct.
 
         """
-        worktree = super().get(git,
-                               project.get_section(),
-                               cls.subsection(),
-                               name,
-                               **kwargs)
+        worktree = super().get(
+            git, project.get_section(), cls.subsection(), name, **kwargs
+        )
         project.push_scope(worktree)
         return worktree
 
     @classmethod
     def get_managing_command(cls):
-        return 'worktree'
+        return "worktree"
 
     @classmethod
     def get_by_path(cls, git, project, path):
         """Given a Project section and a path, get the associated Worktree."""
         pathsection = cls.Path.get(git, project.get_section(), path)
-        if hasattr(pathsection, 'worktree'):
+        if hasattr(pathsection, "worktree"):
             assert pathsection.worktree
             return cls.get(git, project, pathsection.worktree, path=path)
         return None
@@ -290,8 +284,10 @@ class Worktree(ScopedConfigObject):
         # Read what the steps below need first, because removing the config
         # section also removes these attributes.
         path = self.path
-        trees = [getattr(self, name, None)
-                 for name in ('builddir', 'prefix', 'installdir')]
+        trees = [
+            getattr(self, name, None)
+            for name in ("builddir", "prefix", "installdir")
+        ]
         ident = self.get_ident()
         committish = self.committish
 
@@ -321,8 +317,10 @@ class Worktree(ScopedConfigObject):
                 if branch_name == committish_name:
                     break
             else:
-                project.prune_branch(committish,
-                                     keep_remote_branch=keep_remote_branch)
+                project.prune_branch(
+                    committish, keep_remote_branch=keep_remote_branch
+                )
+
 
 class WorktreePlugin(Plugin):
     """
@@ -445,7 +443,7 @@ class WorktreePlugin(Plugin):
     """
 
     def __init__(self):
-        super().__init__('worktree')
+        super().__init__("worktree")
 
     def initialize(self, git, gitproject, project, plugin_manager):
         """Instantiate a Worktree if we are in a worktree path, providing scoping for
@@ -464,10 +462,12 @@ class WorktreePlugin(Plugin):
         path = Path.cwd()
         path.resolve()
         while True:
-            if ConfigObject.exists(git,
-                                   project.get_section(),
-                                   Worktree.Path.subsection(),
-                                   str(path)):
+            if ConfigObject.exists(
+                git,
+                project.get_section(),
+                Worktree.Path.subsection(),
+                str(path),
+            ):
                 worktree = Worktree.get_by_path(git, project, str(path))
                 break
             parent = path.parent
@@ -475,75 +475,92 @@ class WorktreePlugin(Plugin):
                 break
             path = parent
 
-    def add_arguments(self,
-                      git,
-                      gitproject,
-                      project,
-                      parser_manager,
-                      plugin_manage):
+    def add_arguments(
+        self, git, gitproject, project, parser_manager, plugin_manage
+    ):
         """Add arguments for 'git-project worktree.'"""
 
         # worktree
-        worktree_parser = add_top_level_command(parser_manager,
-                                                Worktree.get_managing_command(),
-                                                Worktree.get_managing_command(),
-                                                help='Manage worktrees',
-                                                formatter_class=argparse.RawDescriptionHelpFormatter)
+        worktree_parser = add_top_level_command(
+            parser_manager,
+            Worktree.get_managing_command(),
+            Worktree.get_managing_command(),
+            help="Manage worktrees",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
 
         add_plugin_version_argument(worktree_parser)
 
-        worktree_subparser = parser_manager.add_subparser(worktree_parser,
-                                                          'worktree-command',
-                                                          help='worktree commands')
+        worktree_subparser = parser_manager.add_subparser(
+            worktree_parser, "worktree-command", help="worktree commands"
+        )
 
         # worktree add
-        worktree_add_parser = parser_manager.add_parser(worktree_subparser,
-                                                        'add',
-                                                        'worktree-add',
-                                                        help='Create a worktree',
-                                                        epilog='The path is required. The committish defaults to HEAD.')
+        worktree_add_parser = parser_manager.add_parser(
+            worktree_subparser,
+            "add",
+            "worktree-add",
+            help="Create a worktree",
+            epilog="The path is required. The committish defaults to HEAD.",
+        )
 
         worktree_add_parser.set_defaults(func=command_worktree_add)
 
-        worktree_add_parser.add_argument('path',
-                                         help='Path for worktree checkout')
-        worktree_add_parser.add_argument('committish',
-                                         nargs='?',
-                                         help='Branch point for worktree')
-        worktree_add_parser.add_argument('-b',
-                                         '--branch',
-                                         metavar='BRANCH',
-                                         help='Create BRANCH for the worktree')
+        worktree_add_parser.add_argument(
+            "path", help="Path for worktree checkout"
+        )
+        worktree_add_parser.add_argument(
+            "committish", nargs="?", help="Branch point for worktree"
+        )
+        worktree_add_parser.add_argument(
+            "-b",
+            "--branch",
+            metavar="BRANCH",
+            help="Create BRANCH for the worktree",
+        )
 
         # worktree rm
-        worktree_rm_parser = parser_manager.add_parser(worktree_subparser,
-                                                       'rm',
-                                                       'worktree-rm',
-                                                       help='Remove a worktree')
+        worktree_rm_parser = parser_manager.add_parser(
+            worktree_subparser, "rm", "worktree-rm", help="Remove a worktree"
+        )
 
         worktree_rm_parser.set_defaults(func=command_worktree_rm)
 
-        worktree_rm_parser.add_argument('name',
-                                        help='Worktree to remove')
-        worktree_rm_parser.add_argument('-f', '--force', action='store_true',
-                                        help='Remove even if branch is not merged')
-        worktree_rm_parser.add_argument('--keep-branch', action='store_true',
-                                        help='Keep the branch, locally and on remotes')
-        worktree_rm_parser.add_argument('--keep-remote-branch',
-                                        action='store_true',
-                                        help='Keep the branch on remotes, deleting only the local copy')
+        worktree_rm_parser.add_argument("name", help="Worktree to remove")
+        worktree_rm_parser.add_argument(
+            "-f",
+            "--force",
+            action="store_true",
+            help="Remove even if branch is not merged",
+        )
+        worktree_rm_parser.add_argument(
+            "--keep-branch",
+            action="store_true",
+            help="Keep the branch, locally and on remotes",
+        )
+        worktree_rm_parser.add_argument(
+            "--keep-remote-branch",
+            action="store_true",
+            help="Keep the branch on remotes, deleting only the local copy",
+        )
 
         # add a clone option to create a worktree layout.
-        clone_parser = parser_manager.find_parser('clone')
+        clone_parser = parser_manager.find_parser("clone")
         if clone_parser:
-            clone_parser.add_argument('--worktree', action='store_true',
-                                      help='Create a layout convenient for worktree use')
+            clone_parser.add_argument(
+                "--worktree",
+                action="store_true",
+                help="Create a layout convenient for worktree use",
+            )
 
         # add an init option to create a worktree layout.
-        init_parser = parser_manager.find_parser('init')
+        init_parser = parser_manager.find_parser("init")
         if init_parser:
-            init_parser.add_argument('--worktree', action='store_true',
-                                     help='Create a layout convenient for worktree use')
+            init_parser.add_argument(
+                "--worktree",
+                action="store_true",
+                help="Create a layout convenient for worktree use",
+            )
 
     def _choose_main_branch(self, git):
         """Return the refname of the main branch.  Ask the user if we cannot determine a
@@ -554,11 +571,13 @@ class WorktreePlugin(Plugin):
         if main:
             return git.branch_name_to_refname(main)
 
-        branches = [branch for branch in git.iterrefnames(['refs/heads'])]
+        branches = [branch for branch in git.iterrefnames(["refs/heads"])]
         while True:
             for refname in branches:
                 print(git.refname_to_branch_name(refname))
-            main = input('No unique main branch found, enter branch to use as main: ')
+            main = input(
+                "No unique main branch found, enter branch to use as main: "
+            )
             if git.branch_name_to_refname(main) in branches:
                 break
 
@@ -571,45 +590,46 @@ class WorktreePlugin(Plugin):
         """
         assert p_git.is_bare_repository()
 
-        p_git.set_remote_fetch_refspecs('origin',
-                                        ['+refs/heads/*:refs/remotes/origin/*'])
-        p_git.fetch_remote('origin')
+        p_git.set_remote_fetch_refspecs(
+            "origin", ["+refs/heads/*:refs/remotes/origin/*"]
+        )
+        p_git.fetch_remote("origin")
 
         main = self._choose_main_branch(p_git)
 
-        for refname in p_git.iterrefnames(['refs/heads']):
+        for refname in p_git.iterrefnames(["refs/heads"]):
             if refname == main:
-                remote_refname = p_git.get_remote_fetch_refname(refname, 'origin')
+                remote_refname = p_git.get_remote_fetch_refname(
+                    refname, "origin"
+                )
                 p_git.set_branch_upstream(refname, remote_refname)
             else:
                 p_git.delete_branch(refname)
 
         return main
 
-    def _setup_main_worktree(self,
-                             main,
-                             p_git,
-                             p_gitproject,
-                             p_project,
-                             path,
-                             clargs):
+    def _setup_main_worktree(
+        self, main, p_git, p_gitproject, p_project, path, clargs
+    ):
         """Create a main woorktree for a newly-created worktree layout."""
         # Set up a main worktree.
         main_branch = p_git.refname_to_branch_name(main)
 
         main_path = path / main_branch
-        setattr(clargs, 'committish', main_branch)
-        setattr(clargs, 'path', str(main_path))
+        clargs.committish = main_branch
+        clargs.path = str(main_path)
 
         command_worktree_add(p_git, p_gitproject, p_project, clargs)
 
-    def modify_arguments(self, git, gitproject, project, parser_manager, plugin_manager):
+    def modify_arguments(
+        self, git, gitproject, project, parser_manager, plugin_manager
+    ):
         """Modify arguments for 'git-project worktree.'"""
 
         # If a clone is done, set up a main worktree if told to.
-        clone_parser = parser_manager.find_parser('clone')
+        clone_parser = parser_manager.find_parser("clone")
         if clone_parser:
-            command_clone = clone_parser.get_default('func')
+            command_clone = clone_parser.get_default("func")
 
             # Some source trees (i.e. go) don't work well with worktrees
             # alongside a directory named ".git" so instead create a hidden
@@ -622,13 +642,13 @@ class WorktreePlugin(Plugin):
                 # If .git is the suffix, remove it.  If ".git" is the last
                 # component, use the parent name.
                 urlname = urlpath.name
-                if urlname == '.git':
+                if urlname == ".git":
                     urlname = urlpath.parent.name
 
-                if not urlname.endswith('.git'):
-                    urlname += '.git'
+                if not urlname.endswith(".git"):
+                    urlname += ".git"
 
-                return '.' + urlname
+                return "." + urlname
 
             # Without this the container is not a repository, so anything
             # that stands there and asks git a question gets nothing. It
@@ -639,30 +659,32 @@ class WorktreePlugin(Plugin):
             # Go walks past a ".git" file, while git and pygit2 honour it.
             def write_container_gitdir(container: Path, gitdir_name: str):
                 # Keep the pointer relative so the container still moves.
-                (container / '.git').write_text(f'gitdir: {gitdir_name}\n')
+                (container / ".git").write_text(f"gitdir: {gitdir_name}\n")
 
             def worktree_command_clone(p_git, p_gitproject, p_project, clargs):
                 if clargs.worktree:
                     path = Path.cwd()
-                    if hasattr(clargs, 'path') and clargs.path:
+                    if hasattr(clargs, "path") and clargs.path:
                         path = Path(clargs.path)
 
-                    assert hasattr(clargs, 'url')
+                    assert hasattr(clargs, "url")
 
                     path = path / get_hidden_gitdir_name(clargs.url)
 
                     bare_specified = clargs.bare
 
-                    setattr(clargs, 'path', str(path))
-                    setattr(clargs, 'bare', True)
+                    clargs.path = str(path)
+                    clargs.bare = True
 
                     # Bare clone to the hidden directory.
-                    path = command_clone(p_git, p_gitproject, p_project, clargs)
+                    path = command_clone(
+                        p_git, p_gitproject, p_project, clargs
+                    )
 
                     # If the user did not ask for a bare repo, rewrite refspecs,
                     # fetch remote refs and rewrite existing refs (just main)
                     # to track the remote ref.  Delete other "local" branches.
-                    main = ''
+                    main = ""
                     if not bare_specified:
                         main = self._rewrite_bare_refspects(p_git)
 
@@ -674,23 +696,27 @@ class WorktreePlugin(Plugin):
                     # Detach HEAD so we can worktree main.
                     p_git.detach_head()
 
-                    self._setup_main_worktree(main,
-                                              p_git,
-                                              p_gitproject,
-                                              p_project,
-                                              Path(path).parent,
-                                              clargs)
+                    self._setup_main_worktree(
+                        main,
+                        p_git,
+                        p_gitproject,
+                        p_project,
+                        Path(path).parent,
+                        clargs,
+                    )
                 else:
-                    path = command_clone(p_git, p_gitproject, p_project, clargs)
+                    path = command_clone(
+                        p_git, p_gitproject, p_project, clargs
+                    )
 
                 return path
 
             clone_parser.set_defaults(func=worktree_command_clone)
 
         # If an init is done, set up a main worktree layout if told to.
-        init_parser = parser_manager.find_parser('init')
+        init_parser = parser_manager.find_parser("init")
         if init_parser:
-            command_init = init_parser.get_default('func')
+            command_init = init_parser.get_default("func")
 
             def worktree_command_init(p_git, p_gitproject, p_project, clargs):
                 path = command_init(p_git, p_gitproject, p_project, clargs)
@@ -701,37 +727,43 @@ class WorktreePlugin(Plugin):
                     # A bare repository rewrites origin's refspecs. Otherwise
                     # the project remote's url names the hidden git directory.
                     # Check first, so a missing remote changes nothing.
-                    remote = 'origin'
+                    remote = "origin"
                     if not was_bare:
                         remote = next(p_project.iterremotes(), remote)
                     try:
                         p_git.get_remote_url(remote)
                     except KeyError:
-                        raise GitProjectException(f'Cannot initialize worktree layout, no remote named {remote}')
+                        raise GitProjectException(
+                            f"Cannot initialize worktree layout, no remote named {remote}"
+                        )
 
                     main = self._choose_main_branch(p_git)
 
                     # If it's not already, convert the current workarea to a bare repository.
                     if not p_git.is_bare_repository():
                         if not p_git.workarea_is_clean():
-                            raise GitProjectException('Cannot initialize worktree layout, working copy not clean')
+                            raise GitProjectException(
+                                "Cannot initialize worktree layout, working copy not clean"
+                            )
 
                         gitdir = Path(p_git.get_gitdir())
                         workarea_root = Path(p_git.get_working_copy_root())
                         assert workarea_root.exists()
 
-                        if gitdir != workarea_root / '.git':
-                            raise GitProjectException('Not creating worktree layout -- are you in a worktree?')
+                        if gitdir != workarea_root / ".git":
+                            raise GitProjectException(
+                                "Not creating worktree layout -- are you in a worktree?"
+                            )
 
                         # Set bare and detach before removing files so they
                         # don't come back.  If we detach later, files will be
                         # checkout out.
-                        p_git.config.set_item('core', 'bare', 'true')
+                        p_git.config.set_item("core", "bare", "true")
                         p_git.detach_head()
 
                         # Remove everything except .git.
                         for filename in os.listdir(workarea_root):
-                            if filename == '.git':
+                            if filename == ".git":
                                 continue
                             path = workarea_root / filename
                             if os.path.isfile(path) or os.path.islink(path):
@@ -744,10 +776,12 @@ class WorktreePlugin(Plugin):
                         # Rename .git to something else (see
                         # get_hidden_gitdir_name).
                         assert gitdir.is_dir()
-                        assert gitdir.name == '.git'
+                        assert gitdir.name == ".git"
 
                         remote = next(p_project.iterremotes())
-                        newgitdir = gitdir.parent / get_hidden_gitdir_name(p_git.get_remote_url(remote))
+                        newgitdir = gitdir.parent / get_hidden_gitdir_name(
+                            p_git.get_remote_url(remote)
+                        )
                         gitdir.rename(newgitdir)
                         assert newgitdir.exists()
                         assert not gitdir.exists()
@@ -771,19 +805,23 @@ class WorktreePlugin(Plugin):
                         # whatever remote they should go to.  In general we
                         # cannot know which branches should go where so just
                         # punt and tell the user to clean them up.
-                        for refname in p_git.iterrefnames(['refs/heads']):
+                        for refname in p_git.iterrefnames(["refs/heads"]):
                             if refname != main:
-                                raise GitProjectException('Non-main branches detected, please push and/or delete them and try again.')
+                                raise GitProjectException(
+                                    "Non-main branches detected, please push and/or delete them and try again."
+                                )
 
                         newmain = self._rewrite_bare_refspects(p_git)
                         assert newmain == main
 
-                    self._setup_main_worktree(main,
-                                              p_git,
-                                              p_gitproject,
-                                              p_project,
-                                              workarea_root,
-                                              clargs)
+                    self._setup_main_worktree(
+                        main,
+                        p_git,
+                        p_gitproject,
+                        p_project,
+                        workarea_root,
+                        clargs,
+                    )
 
             init_parser.set_defaults(func=worktree_command_init)
 

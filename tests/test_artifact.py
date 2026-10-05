@@ -21,325 +21,284 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-import git_project
-from git_project import ConfigObject
-from git_project.test_support import check_config_file
-from git_project_core_plugins import Artifact, ArtifactPlugin
-import common
-
 import os
-import pytest
 from pathlib import Path
 
+import common
+import git_project
+import pytest
+from git_project import ConfigObject
+from git_project.test_support import check_config_file
+
+from git_project_core_plugins import Artifact, ArtifactPlugin
+
+
 class MyConfigObject(ConfigObject):
-    def __init__(self,
-                 git,
-                 project_section,
-                 subsection,
-                 ident,
-                 **kwargs):
-        super().__init__(git,
-                         project_section,
-                         subsection,
-                         ident,
-                         **kwargs)
+    def __init__(self, git, project_section, subsection, ident, **kwargs):
+        super().__init__(git, project_section, subsection, ident, **kwargs)
 
     @classmethod
     def get(cls, git, project_section, ident, **kwargs):
-        return super().get(git,
-                           project_section,
-                           'myconfigobject',
-                           ident,
-                           **kwargs)
+        return super().get(
+            git, project_section, "myconfigobject", ident, **kwargs
+        )
 
-def test_artifact_add_arguments(reset_directory,
-                                git,
-                                gitproject,
-                                project,
-                                parser_manager,
-                                plugin_manager):
+
+def test_artifact_add_arguments(
+    reset_directory, git, gitproject, project, parser_manager, plugin_manager
+):
     plugin = ArtifactPlugin()
 
-    plugin.add_arguments(git,
-                         gitproject,
-                         project,
-                         parser_manager,
-                         plugin_manager)
+    plugin.add_arguments(
+        git, gitproject, project, parser_manager, plugin_manager
+    )
 
-    artifact_add_parser = parser_manager.find_parser('artifact-add')
+    artifact_add_parser = parser_manager.find_parser("artifact-add")
 
     artifact_add_args = [
-        'subsection',
-        'path',
+        "subsection",
+        "path",
     ]
 
     common.check_args(artifact_add_parser, artifact_add_args)
 
-    assert artifact_add_parser.get_default('func').__name__ == 'command_artifact_add'
+    assert (
+        artifact_add_parser.get_default("func").__name__
+        == "command_artifact_add"
+    )
 
-    artifact_rm_parser = parser_manager.find_parser('artifact-rm')
+    artifact_rm_parser = parser_manager.find_parser("artifact-rm")
 
     artifact_rm_args = [
-        'subsection',
-        'path',
+        "subsection",
+        "path",
     ]
 
     common.check_args(artifact_rm_parser, artifact_rm_args)
 
-    assert artifact_rm_parser.get_default('func').__name__ == 'command_artifact_rm'
+    assert (
+        artifact_rm_parser.get_default("func").__name__
+        == "command_artifact_rm"
+    )
 
-def test_artifact_get(reset_directory,
-                      git,
-                      gitproject,
-                      project):
-    setattr(project, 'builddir', '/path/to/build')
 
-    artifact = Artifact.get(git,
-                            project.get_section(),
-                            'worktree',
-                            itempath='{builddir}')
+def test_artifact_get(reset_directory, git, gitproject, project):
+    project.builddir = "/path/to/build"
 
-    assert artifact._section == 'project.artifact.worktree'
-    assert artifact.itempath == '{builddir}'
+    artifact = Artifact.get(
+        git, project.get_section(), "worktree", itempath="{builddir}"
+    )
 
-def test_artifact_add(git_project_runner,
-                      git):
+    assert artifact._section == "project.artifact.worktree"
+    assert artifact.itempath == "{builddir}"
+
+
+def test_artifact_add(git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'worktree',
-                           '{builddir}')
+    git_project_runner.run(
+        ".*", "", "artifact", "add", "worktree", "{builddir}"
+    )
 
-    check_config_file('project.artifact.worktree',
-                      'itempath',
-                      {'{builddir}'})
+    check_config_file("project.artifact.worktree", "itempath", {"{builddir}"})
 
-def test_artifact_rm_item(git_project_runner,
-                          git):
+
+def test_artifact_rm_item(git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'worktree',
-                           '{builddir}')
+    git_project_runner.run(
+        ".*", "", "artifact", "add", "worktree", "{builddir}"
+    )
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'worktree',
-                           '{installdir}')
+    git_project_runner.run(
+        ".*", "", "artifact", "add", "worktree", "{installdir}"
+    )
 
-    check_config_file('project.artifact.worktree',
-                      'itempath',
-                      {'{builddir}', '{installdir}'})
+    check_config_file(
+        "project.artifact.worktree", "itempath", {"{builddir}", "{installdir}"}
+    )
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'rm',
-                           'worktree',
-                           '\\\\{builddir\\\\}')
+    git_project_runner.run(
+        ".*", "", "artifact", "rm", "worktree", "\\\\{builddir\\\\}"
+    )
 
-    check_config_file('project.artifact.worktree',
-                      'itempath',
-                      {'{installdir}'})
+    check_config_file(
+        "project.artifact.worktree", "itempath", {"{installdir}"}
+    )
 
-def test_artifact_rm_items(git_project_runner,
-                           git):
+
+def test_artifact_rm_items(git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'worktree',
-                           '{builddir}')
+    git_project_runner.run(
+        ".*", "", "artifact", "add", "worktree", "{builddir}"
+    )
+
+    git_project_runner.run(
+        ".*", "", "artifact", "add", "worktree", "{installdir}"
+    )
+
+    check_config_file(
+        "project.artifact.worktree", "itempath", {"{builddir}", "{installdir}"}
+    )
+
+    git_project_runner.run(".*", "", "artifact", "rm", "worktree")
+
+    check_config_file(
+        "project.artifact.worktree",
+        "itempath",
+        {"{builddir}, {installdir}"},
+        section_present=False,
+    )
 
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'worktree',
-                           '{installdir}')
-
-    check_config_file('project.artifact.worktree',
-                      'itempath',
-                      {'{builddir}', '{installdir}'})
-
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'rm',
-                           'worktree')
-
-    check_config_file('project.artifact.worktree',
-                      'itempath',
-                      {'{builddir}, ''{installdir}'},
-                      section_present = False)
-
-def test_artifact_rm_config(git_project_runner,
-                            git,
-                            project):
+def test_artifact_rm_config(git_project_runner, git, project):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    tempdir = Path(workdir) / 'temp'
+    tempdir = Path(workdir) / "temp"
 
     tempdir.mkdir()
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'myconfigobject',
-                           f'{tempdir}')
+    git_project_runner.run(
+        ".*", "", "artifact", "add", "myconfigobject", f"{tempdir}"
+    )
 
     git.reload_config()
 
-    obj = MyConfigObject.get(git, project.get_section(), 'test')
+    obj = MyConfigObject.get(git, project.get_section(), "test")
     obj.rm()
 
     assert not tempdir.exists()
 
-def test_artifact_rm_substitution(git_project_runner,
-                                  git,
-                                  project):
+
+def test_artifact_rm_substitution(git_project_runner, git, project):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    tempdir = Path(workdir) / 'temp'
+    tempdir = Path(workdir) / "temp"
 
     tempdir.mkdir()
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'myconfigobject',
-                           '{git_workdir}/temp')
+    git_project_runner.run(
+        ".*", "", "artifact", "add", "myconfigobject", "{git_workdir}/temp"
+    )
 
     git.reload_config()
 
-    obj = MyConfigObject.get(git, project.get_section(), 'test')
+    obj = MyConfigObject.get(git, project.get_section(), "test")
     obj.rm()
 
     assert not tempdir.exists()
 
-def test_artifact_rm_path_with_space(git_project_runner,
-                                     git,
-                                     project):
+
+def test_artifact_rm_path_with_space(git_project_runner, git, project):
     workdir = Path(git.get_working_copy_root())
 
     git_project_runner.chdir(workdir)
 
-    target = workdir / 'has space'
+    target = workdir / "has space"
     target.mkdir()
-    (target / 'file').write_text('x')
+    (target / "file").write_text("x")
 
     # A shell would split the path into these two and remove them.
-    (workdir / 'has').mkdir()
-    (workdir / 'space').mkdir()
+    (workdir / "has").mkdir()
+    (workdir / "space").mkdir()
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'myconfigobject',
-                           f'{target}')
+    git_project_runner.run(
+        ".*", "", "artifact", "add", "myconfigobject", f"{target}"
+    )
 
     git.reload_config()
 
-    obj = MyConfigObject.get(git, project.get_section(), 'test')
+    obj = MyConfigObject.get(git, project.get_section(), "test")
     obj.rm()
 
     assert not target.exists()
-    assert (workdir / 'has').exists()
-    assert (workdir / 'space').exists()
+    assert (workdir / "has").exists()
+    assert (workdir / "space").exists()
 
-def test_artifact_rm_glob(git_project_runner,
-                          git,
-                          project,
-                          monkeypatch):
+
+def test_artifact_rm_glob(git_project_runner, git, project, monkeypatch):
     workdir = Path(git.get_working_copy_root())
 
     git_project_runner.chdir(workdir)
     # rm runs in this process, so the relative pattern resolves here.
     monkeypatch.chdir(workdir)
 
-    out = workdir / 'out'
+    out = workdir / "out"
     out.mkdir()
-    (out / 'a.o').write_text('x')
-    (out / 'b.o').write_text('x')
-    (out / 'keep.c').write_text('x')
+    (out / "a.o").write_text("x")
+    (out / "b.o").write_text("x")
+    (out / "keep.c").write_text("x")
 
-    git_project_runner.run('.*',
-                           '',
-                           'artifact',
-                           'add',
-                           'myconfigobject',
-                           # Relative, because pytest's directory names hold
-                           # '[' and ']', which are glob characters too.
-                           'out/*.o')
+    git_project_runner.run(
+        ".*",
+        "",
+        "artifact",
+        "add",
+        "myconfigobject",
+        # Relative, because pytest's directory names hold
+        # '[' and ']', which are glob characters too.
+        "out/*.o",
+    )
 
     git.reload_config()
 
-    obj = MyConfigObject.get(git, project.get_section(), 'test')
+    obj = MyConfigObject.get(git, project.get_section(), "test")
     obj.rm()
 
-    assert not (out / 'a.o').exists()
-    assert not (out / 'b.o').exists()
-    assert (out / 'keep.c').exists()
+    assert not (out / "a.o").exists()
+    assert not (out / "b.o").exists()
+    assert (out / "keep.c").exists()
+
 
 def test_artifact_remove_empty_path_removes_nothing(tmp_path, monkeypatch):
     from git_project_core_plugins.artifact import remove_artifact_path
 
-    (tmp_path / 'keep').write_text('x')
+    (tmp_path / "keep").write_text("x")
     monkeypatch.chdir(tmp_path)
 
-    remove_artifact_path('')
+    remove_artifact_path("")
 
-    assert (tmp_path / 'keep').exists()
+    assert (tmp_path / "keep").exists()
+
 
 def test_artifact_remove_expands_home_and_vars(tmp_path, monkeypatch):
     from git_project_core_plugins.artifact import remove_artifact_path
 
-    monkeypatch.setenv('HOME', str(tmp_path))
-    monkeypatch.setenv('ARTIFACT_TEST_DIR', 'viavar')
-    (tmp_path / 'viahome').mkdir()
-    (tmp_path / 'viavar').mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("ARTIFACT_TEST_DIR", "viavar")
+    (tmp_path / "viahome").mkdir()
+    (tmp_path / "viavar").mkdir()
 
-    remove_artifact_path('~/viahome')
-    remove_artifact_path(f'{tmp_path}/$ARTIFACT_TEST_DIR')
+    remove_artifact_path("~/viahome")
+    remove_artifact_path(f"{tmp_path}/$ARTIFACT_TEST_DIR")
 
-    assert not (tmp_path / 'viahome').exists()
-    assert not (tmp_path / 'viavar').exists()
+    assert not (tmp_path / "viahome").exists()
+    assert not (tmp_path / "viavar").exists()
+
 
 def test_artifact_remove_unset_var_stays_literal(tmp_path, monkeypatch):
     from git_project_core_plugins.artifact import remove_artifact_path
 
     # The shell made an unset variable empty, so $UNSET/keep meant /keep.
-    monkeypatch.delenv('ARTIFACT_TEST_UNSET', raising=False)
-    (tmp_path / 'keep').mkdir()
+    monkeypatch.delenv("ARTIFACT_TEST_UNSET", raising=False)
+    (tmp_path / "keep").mkdir()
     monkeypatch.chdir(tmp_path)
 
-    remove_artifact_path('$ARTIFACT_TEST_UNSET/keep')
+    remove_artifact_path("$ARTIFACT_TEST_UNSET/keep")
 
-    assert (tmp_path / 'keep').exists()
+    assert (tmp_path / "keep").exists()
+
 
 def test_artifact_remove_symlinks_removes_only_the_link(tmp_path, monkeypatch):
     from git_project_core_plugins.artifact import remove_artifact_path
@@ -347,22 +306,24 @@ def test_artifact_remove_symlinks_removes_only_the_link(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     # A link that points at itself. resolve() raises on it.
-    os.symlink('loop', tmp_path / 'loop')
+    os.symlink("loop", tmp_path / "loop")
 
-    target = tmp_path / 'target'
+    target = tmp_path / "target"
     target.mkdir()
-    (target / 'file').write_text('x')
-    os.symlink(target, tmp_path / 'link')
+    (target / "file").write_text("x")
+    os.symlink(target, tmp_path / "link")
 
-    remove_artifact_path(str(tmp_path / 'loop'))
-    remove_artifact_path(str(tmp_path / 'link'))
+    remove_artifact_path(str(tmp_path / "loop"))
+    remove_artifact_path(str(tmp_path / "link"))
 
-    assert not os.path.lexists(tmp_path / 'loop')
-    assert not os.path.lexists(tmp_path / 'link')
-    assert (target / 'file').exists()
+    assert not os.path.lexists(tmp_path / "loop")
+    assert not os.path.lexists(tmp_path / "link")
+    assert (target / "file").exists()
+
 
 class _GuardGit:
     """Just enough of Git to name a working copy, a gitdir and a common dir."""
+
     def __init__(self, workdir, common_dir, gitdir=None):
         self.workdir = workdir
         self.common_dir = common_dir
@@ -380,69 +341,75 @@ class _GuardGit:
     def get_git_common_dir(self):
         return str(self.common_dir)
 
+
 def test_artifact_remove_refuses_protected_paths(tmp_path, monkeypatch):
     from git_project import GitProjectException
+
     from git_project_core_plugins.artifact import remove_artifact_path
 
-    container = tmp_path / 'container'
-    common_dir = container / '.proj.git'
-    workdir = container / 'main'
-    home = tmp_path / 'home'
-    for d in (common_dir, workdir / 'build', home / 'cache'):
+    container = tmp_path / "container"
+    common_dir = container / ".proj.git"
+    workdir = container / "main"
+    home = tmp_path / "home"
+    for d in (common_dir, workdir / "build", home / "cache"):
         d.mkdir(parents=True)
-    monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setenv("HOME", str(home))
     git = _GuardGit(workdir, common_dir)
 
     # Each of these is a protected path or contains one.
     for path in (workdir, container, common_dir, home, tmp_path):
-        with pytest.raises(GitProjectException, match='Refusing to remove'):
+        with pytest.raises(GitProjectException, match="Refusing to remove"):
             remove_artifact_path(str(path), git)
         assert path.exists()
 
     # A glob that matches a protected path is refused too, and removes
     # nothing, not even the matches that sort before the protected one.
-    (container / 'aaa').mkdir()
-    with pytest.raises(GitProjectException, match='Refusing to remove'):
-        remove_artifact_path(f'{container}/*', git)
+    (container / "aaa").mkdir()
+    with pytest.raises(GitProjectException, match="Refusing to remove"):
+        remove_artifact_path(f"{container}/*", git)
     assert workdir.exists()
-    assert (container / 'aaa').exists()
+    assert (container / "aaa").exists()
 
     # Inside a protected path is fine.
-    remove_artifact_path(str(workdir / 'build'), git)
-    remove_artifact_path(str(home / 'cache'), git)
-    assert not (workdir / 'build').exists()
-    assert not (home / 'cache').exists()
+    remove_artifact_path(str(workdir / "build"), git)
+    remove_artifact_path(str(home / "cache"), git)
+    assert not (workdir / "build").exists()
+    assert not (home / "cache").exists()
+
 
 def test_artifact_remove_resolves_relative_common_dir(tmp_path, monkeypatch):
     from git_project import GitProjectException
+
     from git_project_core_plugins.artifact import remove_artifact_path
 
     # Plain git worktree add writes a relative commondir, which git reads
     # relative to the worktree's own gitdir.
-    container = tmp_path / 'container'
-    common_dir = container / '.proj.git'
-    gitdir = common_dir / 'worktrees' / 'main'
-    workdir = container / 'main'
-    elsewhere = tmp_path / 'elsewhere'
+    container = tmp_path / "container"
+    common_dir = container / ".proj.git"
+    gitdir = common_dir / "worktrees" / "main"
+    workdir = container / "main"
+    elsewhere = tmp_path / "elsewhere"
     for d in (gitdir, workdir, elsewhere):
         d.mkdir(parents=True)
-    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     # From here '../..' means tmp_path's parent, not the common dir.
     monkeypatch.chdir(elsewhere)
-    git = _GuardGit(workdir, '../..', gitdir)
+    git = _GuardGit(workdir, "../..", gitdir)
 
-    with pytest.raises(GitProjectException, match='Refusing to remove'):
+    with pytest.raises(GitProjectException, match="Refusing to remove"):
         remove_artifact_path(str(common_dir), git)
     assert common_dir.exists()
+
 
 def test_artifact_object_rm(reset_directory, git, project):
     from git_project_core_plugins.artifact import Artifact
 
-    artifact = Artifact.get(git, project.get_section(), 'gone',
-                            itempath='{builddir}')
-    assert Artifact.exists(git, project.get_section(), 'gone')
+    artifact = Artifact.get(
+        git, project.get_section(), "gone", itempath="{builddir}"
+    )
+    assert Artifact.exists(git, project.get_section(), "gone")
 
     # rm takes no arguments, as it does for every config object.
     artifact.rm()
 
-    assert not Artifact.exists(git, project.get_section(), 'gone')
+    assert not Artifact.exists(git, project.get_section(), "gone")

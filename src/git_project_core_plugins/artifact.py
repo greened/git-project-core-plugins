@@ -32,18 +32,24 @@ git-project artifact rm <subsection> [<path>]
 
 """
 
-from git_project import ConfigObject, SubstitutableConfigObject, Plugin
-from git_project import GitProjectException, add_top_level_command
-
-from git_project_core_plugins.common import add_plugin_version_argument
-
 import argparse
 import glob
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
+from pathlib import Path
+
+from git_project import (
+    ConfigObject,
+    GitProjectException,
+    Plugin,
+    SubstitutableConfigObject,
+    add_top_level_command,
+)
+
+from git_project_core_plugins.common import add_plugin_version_argument
+
 
 def _protected_paths(git):
     """Return the resolved paths that an artifact removal must not remove or
@@ -52,7 +58,7 @@ def _protected_paths(git):
     protects a worktree container, which holds it.
 
     """
-    protected = [Path('/'), Path.home()]
+    protected = [Path("/"), Path.home()]
     if git is not None and git.has_repo():
         workdir = git.get_working_copy_root()
         if workdir:
@@ -64,6 +70,7 @@ def _protected_paths(git):
             common_dir = Path(git.get_gitdir()) / common_dir
         protected.append(common_dir)
     return [path.resolve() for path in protected]
+
 
 def remove_artifact_path(fullpath, git=None):
     """Remove the file or directory at fullpath, as rm -rf would, without a shell.
@@ -104,10 +111,11 @@ def remove_artifact_path(fullpath, git=None):
         for guard in protected:
             if guard == resolved or guard.is_relative_to(resolved):
                 raise GitProjectException(
-                    f'Refusing to remove {path}: it is or contains {guard}')
+                    f"Refusing to remove {path}: it is or contains {guard}"
+                )
 
     for path in paths:
-        print(f'rm -rf {shlex.quote(path)}')
+        print(f"rm -rf {shlex.quote(path)}")
 
         if os.path.islink(path):
             os.remove(path)
@@ -118,16 +126,17 @@ def remove_artifact_path(fullpath, git=None):
         else:
             os.remove(path)
 
+
 class Artifact(SubstitutableConfigObject):
     @classmethod
     def _split_ident(cls, ident):
-        parts = ident.rsplit('.', 1)
+        parts = ident.rsplit(".", 1)
 
         ident = parts[-1]
 
         subsection = cls.subsection()
         if len(parts) > 1:
-            subsection += '.' + '.'.join(parts[:-1])
+            subsection += "." + ".".join(parts[:-1])
 
         return subsection, ident
 
@@ -148,17 +157,10 @@ class Artifact(SubstitutableConfigObject):
         """
         subsection, ident = cls._split_ident(ident)
 
-        return super().get(git,
-                           project_section,
-                           subsection,
-                           ident,
-                           **kwargs)
+        return super().get(git, project_section, subsection, ident, **kwargs)
 
     @classmethod
-    def exists(cls,
-               git,
-               project_section,
-               ident):
+    def exists(cls, git, project_section, ident):
         """Return whether an existing git config exists for the Artifact.
 
         cls: The derived class being checked.
@@ -174,12 +176,7 @@ class Artifact(SubstitutableConfigObject):
 
         return super().exists(git, project_section, subsection, ident)
 
-    def __init__(self,
-                 git,
-                 project_section,
-                 subsection,
-                 ident,
-                 **kwargs):
+    def __init__(self, git, project_section, subsection, ident, **kwargs):
         """Artifact construction.
 
         cls: The derived class being constructed.
@@ -195,20 +192,17 @@ class Artifact(SubstitutableConfigObject):
         **kwargs: Keyword arguments of property values to set upon construction.
 
         """
-        super().__init__(git,
-                         project_section,
-                         subsection,
-                         ident,
-                         **kwargs)
+        super().__init__(git, project_section, subsection, ident, **kwargs)
 
     @staticmethod
     def subsection():
         """ConfigObject protocol subsection."""
-        return 'artifact'
+        return "artifact"
 
     @classmethod
     def get_managing_command(cls):
-        return 'artifact'
+        return "artifact"
+
 
 def command_artifact_add(git, gitproject, project, clargs):
     """Implement git-project artifact add."""
@@ -216,7 +210,8 @@ def command_artifact_add(git, gitproject, project, clargs):
     path = clargs.path
 
     artifact = Artifact.get(git, project.get_section(), ident)
-    artifact.add_item('itempath', path)
+    artifact.add_item("itempath", path)
+
 
 def command_artifact_rm(git, gitproject, project, clargs):
     """Implement git-project artifact rm."""
@@ -224,11 +219,12 @@ def command_artifact_rm(git, gitproject, project, clargs):
 
     artifact = Artifact.get(git, project.get_section(), ident)
 
-    if hasattr(clargs, 'path') and clargs.path:
+    if hasattr(clargs, "path") and clargs.path:
         path = clargs.path
-        artifact.rm_item('itempath', path)
+        artifact.rm_item("itempath", path)
     else:
-        artifact.rm_items('itempath')
+        artifact.rm_items("itempath")
+
 
 class ArtifactPlugin(Plugin):
     """
@@ -299,61 +295,65 @@ class ArtifactPlugin(Plugin):
 
     """
 
-    def __init__(self): super().__init__('artifact')
+    def __init__(self):
+        super().__init__("artifact")
 
-    def add_arguments(self,
-                      git,
-                      gitproject,
-                      project,
-                      parser_manager,
-                      plugin_manager):
+    def add_arguments(
+        self, git, gitproject, project, parser_manager, plugin_manager
+    ):
         """Add arguments for 'git-project artifact.'"""
 
-        artifact_parser = add_top_level_command(parser_manager,
-                                                'artifact',
-                                                'artifact',
-                                                help='Manipulate artifacts')
+        artifact_parser = add_top_level_command(
+            parser_manager, "artifact", "artifact", help="Manipulate artifacts"
+        )
 
         add_plugin_version_argument(artifact_parser)
 
-        artifact_subparser = parser_manager.add_subparser(artifact_parser,
-                                                          'artifact-command',
-                                                          help='artifact commands')
+        artifact_subparser = parser_manager.add_subparser(
+            artifact_parser, "artifact-command", help="artifact commands"
+        )
 
         # add
-        add_parser = parser_manager.add_parser(artifact_subparser,
-                                               'add',
-                                               'artifact-add',
-                                               help='Add an artifact',
-                                               epilog = """
+        add_parser = parser_manager.add_parser(
+            artifact_subparser,
+            "add",
+            "artifact-add",
+            help="Add an artifact",
+            epilog="""
 The <subsection> argument is appended to the <project>.artifact section to form
 the final git config section that will hold the artifact path.
 """,
-                                               formatter_class = argparse.RawDescriptionHelpFormatter)
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
 
-        add_parser.add_argument('subsection',
-                                help='Subsection under which to add the artifact')
-        add_parser.add_argument('path',
-                                help='Artifact path, may use substitutions')
+        add_parser.add_argument(
+            "subsection", help="Subsection under which to add the artifact"
+        )
+        add_parser.add_argument(
+            "path", help="Artifact path, may use substitutions"
+        )
 
         add_parser.set_defaults(func=command_artifact_add)
 
         # rm
-        rm_parser = parser_manager.add_parser(artifact_subparser,
-                                              'rm',
-                                              'artifact-rm',
-                                              help='Remove an artifact path',
-                                              epilog = """
+        rm_parser = parser_manager.add_parser(
+            artifact_subparser,
+            "rm",
+            "artifact-rm",
+            help="Remove an artifact path",
+            epilog="""
 The <subsection> argument is appended to the <project>.artifact section to form
 the final git config section that will hold the artifact path.
 """,
-                                              formatter_class =
-                                              argparse.RawDescriptionHelpFormatter)
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
 
-        rm_parser.add_argument('subsection',
-                               help='Subsection the artifact was added under')
-        rm_parser.add_argument('path', nargs='?',
-                               help='Artifact path, may use substitutions')
+        rm_parser.add_argument(
+            "subsection", help="Subsection the artifact was added under"
+        )
+        rm_parser.add_argument(
+            "path", nargs="?", help="Artifact path, may use substitutions"
+        )
 
         rm_parser.set_defaults(func=command_artifact_rm)
 
@@ -364,22 +364,28 @@ the final git config section that will hold the artifact path.
         def artifact_rm(self):
             # See if there is any artifact associated with this ConfigObject.
             artifact = None
-            if Artifact.exists(self._git,
-                               self._project_section,
-                               self._subsection + '.' + self._ident):
-                artifact = Artifact.get(self._git,
-                                        self._project_section,
-                                        self._subsection + '.' + self._ident)
-            elif Artifact.exists(self._git,
-                                 self._project_section,
-                                 self._subsection):
-                artifact = Artifact.get(self._git,
-                                        self._project_section,
-                                        self._subsection)
+            if Artifact.exists(
+                self._git,
+                self._project_section,
+                self._subsection + "." + self._ident,
+            ):
+                artifact = Artifact.get(
+                    self._git,
+                    self._project_section,
+                    self._subsection + "." + self._ident,
+                )
+            elif Artifact.exists(
+                self._git, self._project_section, self._subsection
+            ):
+                artifact = Artifact.get(
+                    self._git, self._project_section, self._subsection
+                )
 
             if artifact:
-                for path in artifact.iter_multival('itempath'):
-                    fullpath = artifact.substitute_value(self._git, project, path)
+                for path in artifact.iter_multival("itempath"):
+                    fullpath = artifact.substitute_value(
+                        self._git, project, path
+                    )
                     remove_artifact_path(fullpath, self._git)
 
             config_object_rm(self)

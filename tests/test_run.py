@@ -22,13 +22,15 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 import os
-from pathlib import Path
 import re
+from pathlib import Path
 
+import common
 import git_project
 from git_project.test_support import check_config_file
+
 from git_project_core_plugins import RunPlugin
-import common
+
 
 def make_script(*paths, status=0):
     """Create an executable script at each of paths, exiting with status.  Create
@@ -39,509 +41,456 @@ def make_script(*paths, status=0):
 
     """
     for path in paths:
-        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-        with open(path, 'w', encoding='utf-8') as script:
-            script.write(f'#!/bin/sh\nexit {status}\n')
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as script:
+            script.write(f"#!/bin/sh\nexit {status}\n")
         os.chmod(path, 0o755)
 
-def test_run_add_arguments(reset_directory,
-                           project,
-                           git_project_runner):
-    project.add_item('run', 'release')
-    project.add_item('run', 'debug')
 
-    git_project_runner.run(r'(\s*debug\s*release|\s*release\s*debug)',
-                           '',
-                           'run',
-                           '--help')
+def test_run_add_arguments(reset_directory, project, git_project_runner):
+    project.add_item("run", "release")
+    project.add_item("run", "debug")
+
+    git_project_runner.run(
+        r"(\s*debug\s*release|\s*release\s*debug)", "", "run", "--help"
+    )
+
 
 def test_run_get_no_repo(reset_directory, git, project):
     plugin = RunPlugin()
-    Run = plugin.get_class_for('run')
-    run = Run.get(git, project, 'test')
+    Run = plugin.get_class_for("run")
+    run = Run.get(git, project, "test")
 
-    assert not hasattr(run, 'command')
-    assert not hasattr(run, 'description')
+    assert not hasattr(run, "command")
+    assert not hasattr(run, "description")
+
 
 def test_run_get_with_repo(reset_directory, run_git, project):
     plugin = RunPlugin()
-    Run = plugin.get_class_for('run')
-    run = Run.get(run_git, project, 'test')
+    Run = plugin.get_class_for("run")
+    run = Run.get(run_git, project, "test")
 
-    assert run.command == 'make test'
-    assert run.description == 'Run tests'
+    assert run.command == "make test"
+    assert run.description == "Run tests"
+
 
 def test_run_get_managing_command():
     plugin = RunPlugin()
-    Run = plugin.get_class_for('run')
-    assert Run.get_managing_command() == 'run'
+    Run = plugin.get_class_for("run")
+    assert Run.get_managing_command() == "run"
+
 
 def test_run_get_kwargs(reset_directory, run_git, project):
     plugin = RunPlugin()
-    Run = plugin.get_class_for('run')
-    run = Run.get(run_git,
-                  project,
-                  'test',
-                  command='test command')
+    Run = plugin.get_class_for("run")
+    run = Run.get(run_git, project, "test", command="test command")
 
-    assert run.command == 'test command'
-    assert run.description == 'Run tests'
+    assert run.command == "test command"
+    assert run.description == "Run tests"
 
-def test_run_add_and_run(git_project_runner,
-                         git,
-                         capsys):
+
+def test_run_add_and_run(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/doit')
+    make_script(f"{workdir}/doit")
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/doit {branch}')
+    git_project_runner.run(
+        ".*", "", "add", "run", "test", "{git_workdir}/doit {branch}"
+    )
 
-    git_project_runner.run(re.escape(f'{workdir}/doit master'),
-                           '.*',
-                           'run',
-                           'test')
+    git_project_runner.run(
+        re.escape(f"{workdir}/doit master"), ".*", "run", "test"
+    )
 
-def test_run_exit_code(git_project_runner,
-                       git,
-                       script_runner):
+
+def test_run_exit_code(git_project_runner, git, script_runner):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
     # 3 is not a status anything else in the pipeline produces, so it cannot be
     # confused with a shell, argparse, crash or git-project error.
-    make_script(f'{workdir}/doit', status=3)
+    make_script(f"{workdir}/doit", status=3)
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/doit {branch}')
+    git_project_runner.run(
+        ".*", "", "add", "run", "test", "{git_workdir}/doit {branch}"
+    )
 
-    ret = script_runner.run(['git-project', 'run', 'test'], cwd=workdir)
+    ret = script_runner.run(["git-project", "run", "test"], cwd=workdir)
 
     assert ret.returncode == 3
 
-def test_run_recursive_sub(git_project_runner,
-                           git):
+
+def test_run_recursive_sub(git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/master/doit')
+    make_script(f"{workdir}/master/doit")
 
-    git_project_runner.run('.*',
-                           '',
-                           'config',
-                           'rundir',
-                           '{git_workdir}/{branch}')
+    git_project_runner.run(
+        ".*", "", "config", "rundir", "{git_workdir}/{branch}"
+    )
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{rundir}/doit {branch}')
+    git_project_runner.run(
+        ".*", "", "add", "run", "test", "{rundir}/doit {branch}"
+    )
 
-    git_project_runner.run(re.escape(f'{workdir}/master/doit master'),
-                           '.*',
-                           'run',
-                           'test')
+    git_project_runner.run(
+        re.escape(f"{workdir}/master/doit master"), ".*", "run", "test"
+    )
+
 
 def test_run_no_dup(reset_directory, git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/master/doit',
-                f'{workdir}/master/check-doit')
+    make_script(f"{workdir}/master/doit", f"{workdir}/master/check-doit")
 
-    git_project_runner.run('.*',
-                           '',
-                           'config',
-                           'rundir',
-                           '{git_workdir}/{branch}')
+    git_project_runner.run(
+        ".*", "", "config", "rundir", "{git_workdir}/{branch}"
+    )
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'devrel',
-                           '{rundir}/doit {branch}')
+    git_project_runner.run(
+        ".*", "", "add", "run", "devrel", "{rundir}/doit {branch}"
+    )
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'check-devrel',
-                           '{rundir}/check-doit {branch}')
+    git_project_runner.run(
+        ".*", "", "add", "run", "check-devrel", "{rundir}/check-doit {branch}"
+    )
 
     os.chdir(git._repo.path)
 
-    check_config_file('project',
-                      'run',
-                      {'devrel', 'check-devrel'})
+    check_config_file("project", "run", {"devrel", "check-devrel"})
 
-    git_project_runner.run(re.escape(f'{workdir}/master/doit master'),
-                           '.*',
-                           'run',
-                           'devrel')
+    git_project_runner.run(
+        re.escape(f"{workdir}/master/doit master"), ".*", "run", "devrel"
+    )
 
-    check_config_file('project',
-                      'run',
-                      {'devrel', 'check-devrel'})
+    check_config_file("project", "run", {"devrel", "check-devrel"})
 
-    git_project_runner.run(re.escape(f'{workdir}/master/check-doit master'),
-                           '.*',
-                           'run',
-                           'check-devrel')
+    git_project_runner.run(
+        re.escape(f"{workdir}/master/check-doit master"),
+        ".*",
+        "run",
+        "check-devrel",
+    )
 
-    check_config_file('project',
-                      'run',
-                      {'devrel', 'check-devrel'})
+    check_config_file("project", "run", {"devrel", "check-devrel"})
 
-def test_run_add_alias(git_project_runner,
-                       git,
-                       capsys):
+
+def test_run_add_alias(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit')
+    make_script(f"{workdir}/buildit")
 
     # Add aliases.
-    git_project_runner.run('.*',
-                           '',
-                           'run',
-                           '--make-alias',
-                           'build')
+    git_project_runner.run(".*", "", "run", "--make-alias", "build")
 
-    git_project_runner.run('.*',
-                           '',
-                           'run',
-                           '--make-alias',
-                           'check')
+    git_project_runner.run(".*", "", "run", "--make-alias", "check")
 
-    check_config_file('project.run',
-                      'alias',
-                      {'build', 'check'})
+    check_config_file("project.run", "alias", {"build", "check"})
 
     # Add a build.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'build',
-                           'test',
-                           '{git_workdir}/buildit {branch}')
+    git_project_runner.run(
+        ".*", "", "add", "build", "test", "{git_workdir}/buildit {branch}"
+    )
 
     # Check build invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit master'),
-                           '.*',
-                           'build',
-                           'test')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit master"), ".*", "build", "test"
+    )
 
-def test_run_substitute_alias(git_project_runner,
-                              git,
-                              capsys):
+
+def test_run_substitute_alias(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit',
-                f'{workdir}/checkit')
+    make_script(f"{workdir}/buildit", f"{workdir}/checkit")
 
     # Add aliases.
-    git_project_runner.run('.*',
-                           '',
-                           'run',
-                           '--make-alias',
-                           'build')
+    git_project_runner.run(".*", "", "run", "--make-alias", "build")
 
-    git_project_runner.run('.*',
-                           '',
-                           'run',
-                           '--make-alias',
-                           'check')
+    git_project_runner.run(".*", "", "run", "--make-alias", "check")
 
-    check_config_file('project.run',
-                      'alias',
-                      {'build', 'check'})
+    check_config_file("project.run", "alias", {"build", "check"})
 
     # Add a build.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'build',
-                           'test',
-                           '{git_workdir}/buildit {branch} {build}')
+    git_project_runner.run(
+        ".*",
+        "",
+        "add",
+        "build",
+        "test",
+        "{git_workdir}/buildit {branch} {build}",
+    )
 
     # Add a check.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'check',
-                           'test',
-                           '{git_workdir}/checkit {build}')
+    git_project_runner.run(
+        ".*", "", "add", "check", "test", "{git_workdir}/checkit {build}"
+    )
 
     # Check build invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit master test'),
-                           '.*',
-                           'build',
-                           'test')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit master test"), ".*", "build", "test"
+    )
 
     # Check check invocation.
-    git_project_runner.run(re.escape(f'{workdir}/checkit test'),
-                           '.*',
-                           'check',
-                           'test')
+    git_project_runner.run(
+        re.escape(f"{workdir}/checkit test"), ".*", "check", "test"
+    )
 
-def test_run_substitute_options(git_project_runner,
-                                git,
-                                capsys):
+
+def test_run_substitute_options(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit')
+    make_script(f"{workdir}/buildit")
 
     # Add a run.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/buildit {options} {run}')
+    git_project_runner.run(
+        ".*", "", "add", "run", "test", "{git_workdir}/buildit {options} {run}"
+    )
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit master test'),
-                           '.*',
-                           'run',
-                           'test',
-                           '{branch}')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit master test"),
+        ".*",
+        "run",
+        "test",
+        "{branch}",
+    )
 
-def test_run_substitute_empty_options(git_project_runner,
-                                git,
-                                capsys):
+
+def test_run_substitute_empty_options(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit')
+    make_script(f"{workdir}/buildit")
 
     # Add a run.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/buildit {options} {run}')
+    git_project_runner.run(
+        ".*", "", "add", "run", "test", "{git_workdir}/buildit {options} {run}"
+    )
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit  test'),
-                           '.*',
-                           'run',
-                           'test')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit  test"), ".*", "run", "test"
+    )
 
-def test_run_substitute_option_names(git_project_runner,
-                                     git,
-                                     capsys):
+
+def test_run_substitute_option_names(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit')
+    make_script(f"{workdir}/buildit")
 
     # Add a run.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/buildit {option_names} {run}')
+    git_project_runner.run(
+        ".*",
+        "",
+        "add",
+        "run",
+        "test",
+        "{git_workdir}/buildit {option_names} {run}",
+    )
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit branch git_workdir test'),
-                           '.*',
-                           'run',
-                           'test',
-                           '{branch}',
-                           '{git_workdir}')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit branch git_workdir test"),
+        ".*",
+        "run",
+        "test",
+        "{branch}",
+        "{git_workdir}",
+    )
 
-def test_run_substitute_empty_option_names(git_project_runner,
-                                           git,
-                                           capsys):
+
+def test_run_substitute_empty_option_names(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit')
+    make_script(f"{workdir}/buildit")
 
     # Add a run.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/buildit {option_names} {run}')
+    git_project_runner.run(
+        ".*",
+        "",
+        "add",
+        "run",
+        "test",
+        "{git_workdir}/buildit {option_names} {run}",
+    )
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit  test'),
-                           '.*',
-                           'run',
-                           'test')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit  test"), ".*", "run", "test"
+    )
 
-def test_run_substitute_option_name_key(git_project_runner,
-                                        git,
-                                        capsys):
+
+def test_run_substitute_option_name_key(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit-branch-git_workdir')
+    make_script(f"{workdir}/buildit-branch-git_workdir")
 
     # Add a run.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/buildit{option_keysep}{option_key} {run}')
+    git_project_runner.run(
+        ".*",
+        "",
+        "add",
+        "run",
+        "test",
+        "{git_workdir}/buildit{option_keysep}{option_key} {run}",
+    )
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit-branch-git_workdir test'),
-                           '.*',
-                           'run',
-                           'test',
-                           '{branch}',
-                           '{git_workdir}')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit-branch-git_workdir test"),
+        ".*",
+        "run",
+        "test",
+        "{branch}",
+        "{git_workdir}",
+    )
 
-def test_run_substitute_empty_option_name_key(git_project_runner,
-                                              git,
-                                              capsys):
+
+def test_run_substitute_empty_option_name_key(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit')
+    make_script(f"{workdir}/buildit")
 
     # Add a run.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/buildit{option_keysep}{option_key} {run}')
+    git_project_runner.run(
+        ".*",
+        "",
+        "add",
+        "run",
+        "test",
+        "{git_workdir}/buildit{option_keysep}{option_key} {run}",
+    )
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit test'),
-                           '.*',
-                           'run',
-                           'test')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit test"), ".*", "run", "test"
+    )
 
-def test_run_substitute_option_positions(git_project_runner,
-                                         git,
-                                         capsys):
+
+def test_run_substitute_option_positions(git_project_runner, git, capsys):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    make_script(f'{workdir}/buildit')
+    make_script(f"{workdir}/buildit")
 
     # Add a run.
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'test',
-                           '{git_workdir}/buildit {options_1} {run} {options_0}')
+    git_project_runner.run(
+        ".*",
+        "",
+        "add",
+        "run",
+        "test",
+        "{git_workdir}/buildit {options_1} {run} {options_0}",
+    )
 
     # Check run invocation.
-    git_project_runner.run(re.escape(f'{workdir}/buildit foo test master'),
-                           '.*',
-                           'run',
-                           'test',
-                           '{branch}',
-                           'foo')
+    git_project_runner.run(
+        re.escape(f"{workdir}/buildit foo test master"),
+        ".*",
+        "run",
+        "test",
+        "{branch}",
+        "foo",
+    )
 
-def test_run_rm(git_project_runner,
-                git):
+
+def test_run_rm(git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'run',
-                           'gone',
-                           'echo gone')
+    git_project_runner.run(".*", "", "add", "run", "gone", "echo gone")
 
-    git_project_runner.run('Removing project run gone',
-                           '',
-                           'rm',
-                           'run',
-                           'gone')
+    git_project_runner.run(
+        "Removing project run gone", "", "rm", "run", "gone"
+    )
 
     git.reload_config()
-    project = git_project.Project.get(git, 'project')
-    assert 'gone' not in list(project.iter_multival('run'))
-    assert not git_project.ConfigObject.exists(git, 'project', 'run', 'gone')
+    project = git_project.Project.get(git, "project")
+    assert "gone" not in list(project.iter_multival("run"))
+    assert not git_project.ConfigObject.exists(git, "project", "run", "gone")
 
     # Running it now fails, because it is no longer a run.
     git_project_runner.expect_fail = True
-    git_project_runner.run('.*',
-                           '.*',
-                           'run',
-                           'gone')
+    git_project_runner.run(".*", ".*", "run", "gone")
 
-def test_run_options_are_not_shell(git_project_runner,
-                                   git):
+
+def test_run_options_are_not_shell(git_project_runner, git):
     workdir = Path(git.get_working_copy_root())
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*', '', 'add', 'run', 'all',
-                           'echo {options}')
-    git_project_runner.run('.*', '', 'add', 'run', 'one',
-                           'echo {options_0}')
-    git_project_runner.run('.*', '', 'add', 'run', 'key',
-                           'echo x{option_keysep}{option_key}')
+    git_project_runner.run(".*", "", "add", "run", "all", "echo {options}")
+    git_project_runner.run(".*", "", "add", "run", "one", "echo {options_0}")
+    git_project_runner.run(
+        ".*", "", "add", "run", "key", "echo x{option_keysep}{option_key}"
+    )
 
     # Each word reaches the command quoted, as one argument, never as shell.
     # The runner sees the command git-project prints, not the shell's output.
-    git_project_runner.run(re.escape("echo 'a;touch ran_all'"), '.*',
-                           'run', 'all', 'a;touch ran_all')
-    git_project_runner.run(re.escape("echo '$(touch ran_one)'"), '.*',
-                           'run', 'one', '$(touch ran_one)')
-    git_project_runner.run(re.escape("echo x-'k|touch ran_key'"), '.*',
-                           'run', 'key', 'k|touch ran_key')
+    git_project_runner.run(
+        re.escape("echo 'a;touch ran_all'"),
+        ".*",
+        "run",
+        "all",
+        "a;touch ran_all",
+    )
+    git_project_runner.run(
+        re.escape("echo '$(touch ran_one)'"),
+        ".*",
+        "run",
+        "one",
+        "$(touch ran_one)",
+    )
+    git_project_runner.run(
+        re.escape("echo x-'k|touch ran_key'"),
+        ".*",
+        "run",
+        "key",
+        "k|touch ran_key",
+    )
 
-    for marker in ('ran_all', 'ran_one', 'ran_key'):
+    for marker in ("ran_all", "ran_one", "ran_key"):
         assert not (workdir / marker).exists()
 
-def test_run_option_braces_are_not_evaluated(git_project_runner,
-                                             git):
+
+def test_run_option_braces_are_not_evaluated(git_project_runner, git):
     workdir = Path(git.get_working_copy_root())
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*', '', 'add', 'run', 'all',
-                           'echo {options}')
+    git_project_runner.run(".*", "", "add", "run", "all", "echo {options}")
 
     # A plain name is still substituted.
-    git_project_runner.run(re.escape('echo master'), '.*',
-                           'run', 'all', '{branch}')
+    git_project_runner.run(
+        re.escape("echo master"), ".*", "run", "all", "{branch}"
+    )
 
     # Anything else in braces stays text and is never run as Python.
     code = "{__import__('os').system('touch ran_eval')}"
-    git_project_runner.run('.*', '.*', 'run', 'all', code)
+    git_project_runner.run(".*", ".*", "run", "all", code)
 
-    assert not (workdir / 'ran_eval').exists()
+    assert not (workdir / "ran_eval").exists()

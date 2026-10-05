@@ -30,15 +30,18 @@ git-project clone [--bare] <url> [<path>]
 
 """
 
-from git_project import add_top_level_command, Plugin
+from git_project import Plugin, add_top_level_command
 
 from git_project_core_plugins.common import add_plugin_version_argument
 
+
 def command_clone(git, gitproject, project, clargs):
     """Implement git-project clone"""
-    gitdir = git.clone(clargs.url,
-                       path=clargs.path if hasattr(clargs, 'path') else None,
-                       bare=clargs.bare)
+    gitdir = git.clone(
+        clargs.url,
+        path=clargs.path if hasattr(clargs, "path") else None,
+        bare=clargs.bare,
+    )
 
     # Now that we have a repository, add sensible project defaults.  We know
     # there is no existing project in the config file since we just cloned.
@@ -46,6 +49,7 @@ def command_clone(git, gitproject, project, clargs):
     project.set_defaults()
 
     return gitdir
+
 
 class ClonePlugin(Plugin):
     """
@@ -71,32 +75,27 @@ class ClonePlugin(Plugin):
     """
 
     def __init__(self):
-        super().__init__('clone')
+        super().__init__("clone")
 
-    def add_arguments(self,
-                      git,
-                      gitproject,
-                      project,
-                      parser_manager,
-                      plugin_manager):
+    def add_arguments(
+        self, git, gitproject, project, parser_manager, plugin_manager
+    ):
         """Add arguments for 'git-project clone.'"""
         # clone
-        clone_parser = add_top_level_command(parser_manager,
-                                             'clone',
-                                             'clone',
-                                             help='Clone project')
+        clone_parser = add_top_level_command(
+            parser_manager, "clone", "clone", help="Clone project"
+        )
 
         add_plugin_version_argument(clone_parser)
 
         clone_parser.set_defaults(func=command_clone)
 
-        clone_parser.add_argument('url',
-                                  help='URL to clone')
+        clone_parser.add_argument("url", help="URL to clone")
 
-        clone_parser.add_argument('path',
-                                  nargs='?',
-                                  help='Local repository location')
+        clone_parser.add_argument(
+            "path", nargs="?", help="Local repository location"
+        )
 
-        clone_parser.add_argument('--bare',
-                                  action='store_true',
-                                  help='Clone a bare repository')
+        clone_parser.add_argument(
+            "--bare", action="store_true", help="Clone a bare repository"
+        )

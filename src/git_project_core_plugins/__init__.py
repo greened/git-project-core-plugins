@@ -123,21 +123,20 @@ Adding custom commands
   git <project> configure debug
 """
 
+from ._commanddocs import format_reference, from_classes
 from .artifact import Artifact, ArtifactPlugin
 from .branch import BranchPlugin
-from .run import RunPlugin
 from .clone import ClonePlugin
 from .common import add_plugin_version_argument
 from .config import ConfigPlugin
 from .help import Help, HelpPlugin
 from .init import InitPlugin
+from .run import RunPlugin
 from .worktree import Worktree, WorktreePlugin
-
-from ._commanddocs import format_reference, from_classes
 
 # The plugin classes document their own commands, so the reference is built
 # from them rather than kept as a second copy that drifts. ``python -OO``
 # strips the docstring, so guard against None to stay importable there.
 # The prose ends in a literal block, so the join needs the newline or the
 # reference heading unindents into it, which is an RST error.
-__doc__ = (__doc__ or '') + '\n' + format_reference(from_classes(globals()))
+__doc__ = (__doc__ or "") + "\n" + format_reference(from_classes(globals()))

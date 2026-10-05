@@ -21,15 +21,18 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
+from io import StringIO
+
 from git_project_core_plugins import Worktree
 
-from io import StringIO
 
 class AttrDict(dict):
     """Turn a dictionary into an object with attributes."""
+
     def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.__dict__ = self
+
 
 def check_args(actual_parser, expected):
     with StringIO() as buf:

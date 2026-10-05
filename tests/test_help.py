@@ -21,14 +21,15 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-from git_project_core_plugins import HelpPlugin
-from git_project.test_support import check_config_file
-import common
-
 import shlex
 
-def test_help_print_manpage(git_project_runner,
-                            git):
+import common
+from git_project.test_support import check_config_file
+
+from git_project_core_plugins import HelpPlugin
+
+
+def test_help_print_manpage(git_project_runner, git):
 
     expected = """This is a manpage for foo.
 
@@ -38,96 +39,58 @@ It has multiple lines.
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*',
-                           '',
-                           'config',
-                           'help.foo.manpage',
-                           shlex.quote(expected))
+    git_project_runner.run(
+        ".*", "", "config", "help.foo.manpage", shlex.quote(expected)
+    )
 
-    git_project_runner.run(expected, '', 'help', 'foo')
+    git_project_runner.run(expected, "", "help", "foo")
 
-def test_help_and_help(git_project_runner,
-                       git):
+
+def test_help_and_help(git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'help',
-                           'foo',
-                           'Test help')
+    git_project_runner.run(".*", "", "add", "help", "foo", "Test help")
 
-    check_config_file('project.help.foo',
-                      'short',
-                      {'Test help'})
+    check_config_file("project.help.foo", "short", {"Test help"})
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'help',
-                           '--manpage',
-                           'foo',
-                           'Manpage help')
+    git_project_runner.run(
+        ".*", "", "add", "help", "--manpage", "foo", "Manpage help"
+    )
 
-    check_config_file('project.help.foo',
-                      'manpage',
-                      {'Manpage help'})
+    check_config_file("project.help.foo", "manpage", {"Manpage help"})
 
-def test_help_rm_help(git_project_runner,
-                       git):
+
+def test_help_rm_help(git_project_runner, git):
     workdir = git.get_working_copy_root()
 
     git_project_runner.chdir(workdir)
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'help',
-                           'foo',
-                           'Test help')
+    git_project_runner.run(".*", "", "add", "help", "foo", "Test help")
 
-    check_config_file('project.help.foo',
-                      'short',
-                      {'Test help'})
+    check_config_file("project.help.foo", "short", {"Test help"})
 
-    git_project_runner.run('.*',
-                           '',
-                           'add',
-                           'help',
-                           '--manpage',
-                           'foo',
-                           'Manpage help')
+    git_project_runner.run(
+        ".*", "", "add", "help", "--manpage", "foo", "Manpage help"
+    )
 
-    check_config_file('project.help.foo',
-                      'manpage',
-                      {'Manpage help'})
+    check_config_file("project.help.foo", "manpage", {"Manpage help"})
 
-    git_project_runner.run('.*',
-                           '',
-                           'rm',
-                           'help',
-                           'foo')
+    git_project_runner.run(".*", "", "rm", "help", "foo")
 
-    check_config_file('project.help.foo',
-                      'short',
-                      {'Test help'},
-                      key_present=False)
+    check_config_file(
+        "project.help.foo", "short", {"Test help"}, key_present=False
+    )
 
-    check_config_file('project.help.foo',
-                      'manpage',
-                      {'Manpage help'})
+    check_config_file("project.help.foo", "manpage", {"Manpage help"})
 
-    git_project_runner.run('.*',
-                           '',
-                           'rm',
-                           'help',
-                           '--manpage',
-                           'foo')
+    git_project_runner.run(".*", "", "rm", "help", "--manpage", "foo")
 
-    check_config_file('project.help.foo',
-                      'manpage',
-                      {},
-                      section_present=False,
-                      key_present=False)
+    check_config_file(
+        "project.help.foo",
+        "manpage",
+        {},
+        section_present=False,
+        key_present=False,
+    )

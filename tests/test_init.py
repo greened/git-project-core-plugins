@@ -24,23 +24,20 @@
 import os
 from pathlib import Path
 
-from git_project_core_plugins import InitPlugin
 import common
 
-def test_add_arguments(reset_directory,
-                       git,
-                       gitproject,
-                       project,
-                       parser_manager,
-                       plugin_manager):
+from git_project_core_plugins import InitPlugin
+
+
+def test_add_arguments(
+    reset_directory, git, gitproject, project, parser_manager, plugin_manager
+):
     plugin = InitPlugin()
 
-    plugin.add_arguments(git,
-                         gitproject,
-                         project,
-                         parser_manager,
-                         plugin_manager)
+    plugin.add_arguments(
+        git, gitproject, project, parser_manager, plugin_manager
+    )
 
-    init_parser = parser_manager.find_parser('init')
+    init_parser = parser_manager.find_parser("init")
 
-    assert init_parser.get_default('func').__name__ == 'command_init'
+    assert init_parser.get_default("func").__name__ == "command_init"

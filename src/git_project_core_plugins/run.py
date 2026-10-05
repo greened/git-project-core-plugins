@@ -31,16 +31,23 @@ git-project run <name> [<option>...]
 
 """
 
-from git_project import ConfigObject, RunnableConfigObject, Plugin, Project
-from git_project import get_or_add_top_level_command, GitProjectException
-from git_project import run_command_with_shell
-
-from git_project_core_plugins.common import add_plugin_version_argument
-
 import argparse
 import re
 import secrets
 import shlex
+
+from git_project import (
+    ConfigObject,
+    GitProjectException,
+    Plugin,
+    Project,
+    RunnableConfigObject,
+    get_or_add_top_level_command,
+    run_command_with_shell,
+)
+
+from git_project_core_plugins.common import add_plugin_version_argument
+
 
 class RunConfig(ConfigObject):
     """A ConfigObject to manage run aliases."""
@@ -48,14 +55,9 @@ class RunConfig(ConfigObject):
     @staticmethod
     def subsection():
         """ConfigObject protocol subsection."""
-        return 'run'
+        return "run"
 
-    def __init__(self,
-                 git,
-                 project_section,
-                 subsection,
-                 ident = None,
-                 **kwargs):
+    def __init__(self, git, project_section, subsection, ident=None, **kwargs):
         """RunConfig construction.
 
         cls: The derived class being constructed.
@@ -69,11 +71,7 @@ class RunConfig(ConfigObject):
         **kwargs: Keyword arguments of property values to set upon construction.
 
         """
-        super().__init__(git,
-                         project_section,
-                         subsection,
-                         ident,
-                         **kwargs)
+        super().__init__(git, project_section, subsection, ident, **kwargs)
 
     @classmethod
     def get(cls, git, project, **kwargs):
@@ -88,11 +86,10 @@ class RunConfig(ConfigObject):
         kwargs: Attributes to set.
 
         """
-        return super().get(git,
-                           project.get_section(),
-                           cls.subsection(),
-                           None,
-                           **kwargs)
+        return super().get(
+            git, project.get_section(), cls.subsection(), None, **kwargs
+        )
+
 
 class RunPlugin(Plugin):
     """
@@ -197,10 +194,11 @@ class RunPlugin(Plugin):
       worktree
 
     """
+
     def __init__(self):
-        super().__init__('run')
+        super().__init__("run")
         self.classes = dict()
-        self.classes['run'] = self._make_alias_class('run')
+        self.classes["run"] = self._make_alias_class("run")
 
     def _make_alias_class(self, alias):
         # Create a class for the alias.
@@ -214,21 +212,20 @@ class RunPlugin(Plugin):
             """ConfigObject protocol get_managing_command."""
             return alias
 
-        Class = type(alias + "Class", (RunnableConfigObject, ), {
-#            __doc__ = f"""A RunnableConfigObject to manage {alias} names.  Each run name gets its own
-#            config section.
-#
-#            """
-                'subsection': subsection,
-                'get_managing_command': get_managing_command
-        })
+        Class = type(
+            alias + "Class",
+            (RunnableConfigObject,),
+            {
+                #            __doc__ = f"""A RunnableConfigObject to manage {alias} names.  Each run name gets its own
+                #            config section.
+                #
+                #            """
+                "subsection": subsection,
+                "get_managing_command": get_managing_command,
+            },
+        )
 
-        def cons(self,
-                 git,
-                 project_section,
-                 subsection,
-                 ident,
-                 **kwargs):
+        def cons(self, git, project_section, subsection, ident, **kwargs):
             f"""{alias} construction.
 
             cls: The derived class being constructed.
@@ -244,11 +241,9 @@ class RunPlugin(Plugin):
             **kwargs: Keyword arguments of property values to set upon construction.
 
             """
-            super(Class, self).__init__(git,
-                                        project_section,
-                                        subsection,
-                                        ident,
-                                        **kwargs)
+            super(Class, self).__init__(
+                git, project_section, subsection, ident, **kwargs
+            )
 
         @classmethod
         def get(cls, git, project, name, **kwargs):
@@ -265,11 +260,9 @@ class RunPlugin(Plugin):
             kwargs: Attributes to set.
 
             """
-            return super(Class, cls).get(git,
-                                         project.get_section(),
-                                         cls.subsection(),
-                                         name,
-                                         **kwargs)
+            return super(Class, cls).get(
+                git, project.get_section(), cls.subsection(), name, **kwargs
+            )
 
         Class.__init__ = cons
         Class.get = get
@@ -278,135 +271,139 @@ class RunPlugin(Plugin):
         return Class
 
     def _gen_runs_epilog(self, git, project, alias, runs):
-        result = f'Available {alias}s:\n'
+        result = f"Available {alias}s:\n"
         run_width = 20
         for run in runs:
-            help_section = f'{project.get_section()}.help.{alias}.{run}'
-            help_key = 'short'
+            help_section = f"{project.get_section()}.help.{alias}.{run}"
+            help_key = "short"
             if git.config.has_item(help_section, help_key):
                 shorthelp = git.config.get_item(help_section, help_key)
-                result += f'    {run:<{run_width}} - {shorthelp}\n'
+                result += f"    {run:<{run_width}} - {shorthelp}\n"
             else:
-                result += f'    {run}\n'
+                result += f"    {run}\n"
 
         return result
 
-    def _add_alias_arguments(self,
-                             git,
-                             gitproject,
-                             project,
-                             parser_manager,
-                             Class):
+    def _add_alias_arguments(
+        self, git, gitproject, project, parser_manager, Class
+    ):
         alias = Class.get_managing_command()
 
         # add run
-        add_parser = get_or_add_top_level_command(parser_manager,
-                                                  'add',
-                                                  'add',
-                                                  help=f'Add config sections to {project.get_section()}')
+        add_parser = get_or_add_top_level_command(
+            parser_manager,
+            "add",
+            "add",
+            help=f"Add config sections to {project.get_section()}",
+        )
 
-        add_subparser = parser_manager.get_or_add_subparser(add_parser,
-                                                            'add-command',
-                                                            help='add sections')
+        add_subparser = parser_manager.get_or_add_subparser(
+            add_parser, "add-command", help="add sections"
+        )
 
-        add_run_parser = parser_manager.add_parser(add_subparser,
-                                                   alias,
-                                                   'add-' + alias,
-                                                   help=f'Add a {alias} to {project.get_section()}')
+        add_run_parser = parser_manager.add_parser(
+            add_subparser,
+            alias,
+            "add-" + alias,
+            help=f"Add a {alias} to {project.get_section()}",
+        )
 
         def command_add_run(git, gitproject, project, clargs):
             f"""Implement git-project add {alias}"""
-            run = Class.get(git,
-                            project,
-                            clargs.name,
-                            command=clargs.command)
+            run = Class.get(git, project, clargs.name, command=clargs.command)
             project.add_item(alias, clargs.name)
             return run
 
-
         add_run_parser.set_defaults(func=command_add_run)
 
-        add_run_parser.add_argument('name',
-                                    help='Name for the run')
+        add_run_parser.add_argument("name", help="Name for the run")
 
-        add_run_parser.add_argument('command',
-                                    help='Command to run')
+        add_run_parser.add_argument("command", help="Command to run")
 
         runs = []
         if hasattr(project, alias):
             runs = [run for run in project.iter_multival(alias)]
 
         # rm run
-        rm_parser = get_or_add_top_level_command(parser_manager,
-                                                 'rm',
-                                                 'rm',
-                                                 help=f'Remove config sections from {project.get_section()}')
+        rm_parser = get_or_add_top_level_command(
+            parser_manager,
+            "rm",
+            "rm",
+            help=f"Remove config sections from {project.get_section()}",
+        )
 
-        rm_subparser = parser_manager.get_or_add_subparser(rm_parser,
-                                                           'rm-command',
-                                                           help='rm sections')
+        rm_subparser = parser_manager.get_or_add_subparser(
+            rm_parser, "rm-command", help="rm sections"
+        )
 
-        rm_run_parser = parser_manager.add_parser(rm_subparser,
-                                                  alias,
-                                                  'rm-' + alias,
-                                                  help=f'Remove a {alias} from {project.get_section()}')
+        rm_run_parser = parser_manager.add_parser(
+            rm_subparser,
+            alias,
+            "rm-" + alias,
+            help=f"Remove a {alias} from {project.get_section()}",
+        )
 
         def command_rm_run(git, gitproject, project, clargs):
             f"""Implement git-project rm {alias}"""
             if clargs.name not in project.iter_multival(alias):
-                raise GitProjectException(f'No {alias} named {clargs.name}')
+                raise GitProjectException(f"No {alias} named {clargs.name}")
             run = Class.get(git, project, clargs.name)
             run.rm()
-            print(f'Removing project {alias} {clargs.name}')
+            print(f"Removing project {alias} {clargs.name}")
             project.rm_item(alias, clargs.name)
 
         rm_run_parser.set_defaults(func=command_rm_run)
 
         # Offer the names as choices when there are some. The argument is
         # needed either way, or the command has no name to remove.
-        rm_run_parser.add_argument('name', choices=runs if runs else None,
-                                   help='Command name')
+        rm_run_parser.add_argument(
+            "name", choices=runs if runs else None, help="Command name"
+        )
 
         # run
-        command_subparser = parser_manager.find_subparser('command')
+        command_subparser = parser_manager.find_subparser("command")
 
-        run_parser = parser_manager.add_parser(command_subparser,
-                                               alias,
-                                               alias,
-                                               help=f'Invoke {alias}',
-                                               epilog=self._gen_runs_epilog(git,
-                                                                            project,
-                                                                            alias,
-                                                                            runs),
-                                               formatter_class=
-                                               argparse.RawDescriptionHelpFormatter)
+        run_parser = parser_manager.add_parser(
+            command_subparser,
+            alias,
+            alias,
+            help=f"Invoke {alias}",
+            epilog=self._gen_runs_epilog(git, project, alias, runs),
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
 
         def command_run(git, gitproject, project, clargs):
             """Implement git-project run"""
             if clargs.make_alias:
                 run_config = RunConfig.get(git, project)
-                run_config.add_item('alias', clargs.name)
+                run_config.add_item("alias", clargs.name)
             else:
-                if not clargs.name in runs:
-                    raise GitProjectException(f'Unknown {alias} "{clargs.name}," choose one of: {{ {runs} }}')
+                if clargs.name not in runs:
+                    raise GitProjectException(
+                        f'Unknown {alias} "{clargs.name}," choose one of: {{ {runs} }}'
+                    )
                 run = Class.get(git, project, clargs.name)
 
-                translation_table = dict.fromkeys(map(ord, '{}'), None)
+                translation_table = dict.fromkeys(map(ord, "{}"), None)
 
                 # An option may name a value, such as {branch}. Only a plain
                 # {name} is looked up. The substitution evaluates what it is
                 # given as Python, so anything else in braces stays text.
                 def substitute_names(option):
                     return re.sub(
-                        r'\{([A-Za-z_][A-Za-z0-9_]*)\}',
+                        r"\{([A-Za-z_][A-Za-z0-9_]*)\}",
                         lambda match: run.substitute_value(
-                            git, project, '{' + match.group(1) + '}', dict()),
-                        option)
+                            git, project, "{" + match.group(1) + "}", dict()
+                        ),
+                        option,
+                    )
 
                 words = [substitute_names(option) for option in clargs.options]
-                names = [option.translate(translation_table)
-                         for option in clargs.options]
-                option_key = '-'.join(names)
+                names = [
+                    option.translate(translation_table)
+                    for option in clargs.options
+                ]
+                option_key = "-".join(names)
 
                 # The command runs through a shell, so each word from the
                 # command line is shell-quoted, or a ';' in one would run as
@@ -418,27 +415,30 @@ class RunPlugin(Plugin):
                 token = secrets.token_hex(8)
 
                 def placeholder(name):
-                    return f'GITPROJECT{token}{name}END'
+                    return f"GITPROJECT{token}{name}END"
 
                 quoted = {
-                    placeholder('options'):
-                        ' '.join(shlex.quote(word) for word in words),
-                    placeholder('optionnames'):
-                        ' '.join(shlex.quote(name) for name in names),
-                    placeholder('optionkey'):
-                        shlex.quote(option_key) if option_key else '',
+                    placeholder("options"): " ".join(
+                        shlex.quote(word) for word in words
+                    ),
+                    placeholder("optionnames"): " ".join(
+                        shlex.quote(name) for name in names
+                    ),
+                    placeholder("optionkey"): (
+                        shlex.quote(option_key) if option_key else ""
+                    ),
                 }
 
                 formats = {
-                    'options': placeholder('options'),
-                    'option_names': placeholder('optionnames'),
-                    'option_key': placeholder('optionkey'),
-                    'option_keysep': '-' if len(clargs.options) > 0 else ''
+                    "options": placeholder("options"),
+                    "option_names": placeholder("optionnames"),
+                    "option_key": placeholder("optionkey"),
+                    "option_keysep": "-" if len(clargs.options) > 0 else "",
                 }
 
                 for i, word in enumerate(words):
-                    formats[f'options_{i}'] = placeholder(f'option{i}')
-                    quoted[placeholder(f'option{i}')] = shlex.quote(word)
+                    formats[f"options_{i}"] = placeholder(f"option{i}")
+                    quoted[placeholder(f"option{i}")] = shlex.quote(word)
 
                 command = run.substitute_command(git, project, formats)
                 for name, value in quoted.items():
@@ -452,35 +452,33 @@ class RunPlugin(Plugin):
 
         add_plugin_version_argument(run_parser)
 
-        run_parser.add_argument('--make-alias', action='store_true',
-                                help=f'Alias "{alias}" to another command')
+        run_parser.add_argument(
+            "--make-alias",
+            action="store_true",
+            help=f'Alias "{alias}" to another command',
+        )
 
-        run_parser.add_argument('name', help='Command name or alias')
+        run_parser.add_argument("name", help="Command name or alias")
 
-        run_parser.add_argument('options',
-                                nargs='*',
-                                help='Additions options to pass to command')
+        run_parser.add_argument(
+            "options", nargs="*", help="Additions options to pass to command"
+        )
 
-    def add_arguments(self,
-                      git,
-                      gitproject,
-                      project,
-                      parser_manager,
-                      plugin_manage):
+    def add_arguments(
+        self, git, gitproject, project, parser_manager, plugin_manage
+    ):
         """Add arguments for 'git-project run.'"""
         if git.has_repo():
             # Get the global run ConfigObject and add any aliases.
             run_config = RunConfig.get(git, project)
-            for alias in run_config.iter_multival('alias'):
+            for alias in run_config.iter_multival("alias"):
 
                 Class = self._make_alias_class(alias)
 
             for Class in self.iterclasses():
-                self._add_alias_arguments(git,
-                                          gitproject,
-                                          project,
-                                          parser_manager,
-                                          Class)
+                self._add_alias_arguments(
+                    git, gitproject, project, parser_manager, Class
+                )
 
     def get_class_for(self, alias):
         return self.classes[alias]

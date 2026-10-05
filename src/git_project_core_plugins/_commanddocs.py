@@ -38,10 +38,10 @@ import inspect
 import re
 from pathlib import Path
 
-HEADING = 'Command Reference'
+HEADING = "Command Reference"
 
 #: A plugin class named ``WorktreePlugin`` documents the ``worktree`` command.
-_PLUGIN_CLASS = re.compile(r'(\w+)Plugin$')
+_PLUGIN_CLASS = re.compile(r"(\w+)Plugin$")
 
 
 def _command_name(class_name):
@@ -57,15 +57,15 @@ def format_reference(commands):
 
     """
     if not commands:
-        return ''
+        return ""
 
-    out = ['', HEADING, '=' * len(HEADING), '']
+    out = ["", HEADING, "=" * len(HEADING), ""]
     for name in sorted(commands):
         body = inspect.cleandoc(commands[name]).rstrip()
         if not body:
             continue
-        out += [name, '-' * len(name), '', body, '']
-    return '\n'.join(out) + '\n'
+        out += [name, "-" * len(name), "", body, ""]
+    return "\n".join(out) + "\n"
 
 
 def from_classes(namespace):
@@ -89,7 +89,7 @@ def from_source(package_dir):
 
     """
     commands = {}
-    for path in sorted(Path(package_dir).glob('*.py')):
+    for path in sorted(Path(package_dir).glob("*.py")):
         tree = ast.parse(path.read_text())
         for node in tree.body:
             if not isinstance(node, ast.ClassDef):

@@ -30,10 +30,16 @@ git-project config [--add] [--unset] <name> [<value>]
 
 """
 
-from git_project import ConfigObject, RunnableConfigObject
-from git_project import Plugin, Project, GitProjectException
+from git_project import (
+    ConfigObject,
+    GitProjectException,
+    Plugin,
+    Project,
+    RunnableConfigObject,
+)
 
 from git_project_core_plugins.common import add_plugin_version_argument
+
 
 def command_config(git, gitproject, project, clargs):
     """Implement git-project config."""
@@ -42,20 +48,24 @@ def command_config(git, gitproject, project, clargs):
     classname = clargs.classname
 
     subsection = None
-    if hasattr(clargs, 'subsection'):
+    if hasattr(clargs, "subsection"):
         subsection = clargs.subsection
 
     ident = None
-    if hasattr(clargs, 'ident'):
+    if hasattr(clargs, "ident"):
         ident = clargs.ident
 
     if not exister(git, project.get_section(), subsection, ident):
         if ident:
-            raise GitProjectException(f'{classname} \'{ident}\' does not exist')
+            raise GitProjectException(f"{classname} '{ident}' does not exist")
         else:
-            raise GitProjectException(f'No {classname} configured')
+            raise GitProjectException(f"No {classname} configured")
 
-    configitem = getter(git, project, ident) if ident else getter(git, project.get_section())
+    configitem = (
+        getter(git, project, ident)
+        if ident
+        else getter(git, project.get_section())
+    )
 
     if clargs.value:
         if clargs.unset:
@@ -70,6 +80,7 @@ def command_config(git, gitproject, project, clargs):
     else:
         value = getattr(configitem, clargs.name)
         print(value)
+
 
 class ConfigPlugin(Plugin):
     """
@@ -108,63 +119,76 @@ class ConfigPlugin(Plugin):
       worktree
 
     """
+
     def __init__(self):
-        super().__init__('config')
+        super().__init__("config")
 
     def _add_config_parser(self, cls, project, parser_manager):
         command = cls.get_managing_command()
-        config_key = command + '-config' if command else 'config'
+        config_key = command + "-config" if command else "config"
         config_parser = parser_manager.find_parser(config_key)
 
         if not config_parser:
             # Create a config parser under the managing command.
-            command_subparser_key = command + '-command' if command else 'command'
-            command_subparser = parser_manager.find_subparser(command_subparser_key)
+            command_subparser_key = (
+                command + "-command" if command else "command"
+            )
+            command_subparser = parser_manager.find_subparser(
+                command_subparser_key
+            )
             if not command_subparser:
                 # This plugin doesn't have subcommands, so don't add one.
                 return
 
-            config_help = 'Configure ' + command if command else 'Configure git-project'
-            config_parser = parser_manager.add_parser(command_subparser,
-                                                      'config',
-                                                      config_key,
-                                                      help=config_help)
+            config_help = (
+                "Configure " + command if command else "Configure git-project"
+            )
+            config_parser = parser_manager.add_parser(
+                command_subparser, "config", config_key, help=config_help
+            )
 
             config_parser.set_defaults(func=command_config)
             config_parser.set_defaults(getter=cls.get)
             config_parser.set_defaults(exister=cls.exists)
             config_parser.set_defaults(classname=cls.__name__)
 
-            if hasattr(cls, 'subsection'):
+            if hasattr(cls, "subsection"):
                 config_parser.set_defaults(subsection=cls.subsection())
-                config_parser.add_argument('ident', help=f'{cls.__name__} to modify')
+                config_parser.add_argument(
+                    "ident", help=f"{cls.__name__} to modify"
+                )
 
             if not command:
                 # This is the top-level 'config' command.
                 add_plugin_version_argument(config_parser)
 
-            config_parser.add_argument('name', help='Property name')
-            config_parser.add_argument('value', nargs='?', help='Property value to set')
-            config_parser.add_argument('--add', action='store_true',
-                                       help='Add a value to a property')
-            config_parser.add_argument('--unset', action='store_true',
-                                       help='Remove a value from a property')
+            config_parser.add_argument("name", help="Property name")
+            config_parser.add_argument(
+                "value", nargs="?", help="Property value to set"
+            )
+            config_parser.add_argument(
+                "--add", action="store_true", help="Add a value to a property"
+            )
+            config_parser.add_argument(
+                "--unset",
+                action="store_true",
+                help="Remove a value from a property",
+            )
 
-    def add_arguments(self,
-                      git,
-                      gitproject,
-                      project,
-                      parser_manager,
-                      plugin_manager):
+    def add_arguments(
+        self, git, gitproject, project, parser_manager, plugin_manager
+    ):
         """Add arguments for 'git-project config'"""
         self._add_config_parser(Project, project, parser_manager)
 
-    def modify_arguments(self, git, gitproject, project, parser_manager, plugin_manager):
+    def modify_arguments(
+        self, git, gitproject, project, parser_manager, plugin_manager
+    ):
         """Modify arguments for 'git-project config.'"""
 
         # Find all plugins with classes that derive from ConfigObject and add
         # config commands to them.
         for plugin in plugin_manager.iterplugins():
             for cls in plugin.iterclasses():
-                if (issubclass(cls, ConfigObject)):
+                if issubclass(cls, ConfigObject):
                     self._add_config_parser(cls, project, parser_manager)

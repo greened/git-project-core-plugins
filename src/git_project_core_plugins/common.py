@@ -23,5 +23,6 @@
 
 from git_project.commandline import add_version_argument
 
+
 def add_plugin_version_argument(parser):
-    add_version_argument(parser, 'git-project-core-plugins')
+    add_version_argument(parser, "git-project-core-plugins")

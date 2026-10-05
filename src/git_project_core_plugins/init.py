@@ -29,16 +29,25 @@ Summary:
 git-project init
 
 """
-from git_project import Git, RunnableConfigObject, Plugin
-from git_project import add_top_level_command, Project, GitProjectException
+
+import getpass
+
+from git_project import (
+    Git,
+    GitProjectException,
+    Plugin,
+    Project,
+    RunnableConfigObject,
+    add_top_level_command,
+)
 
 from git_project_core_plugins.common import add_plugin_version_argument
 
-import getpass
 
 def command_init(git, gitproject, project, clargs):
     """Implement git-project init."""
     pass
+
 
 class InitPlugin(Plugin):
     """
@@ -61,21 +70,18 @@ class InitPlugin(Plugin):
       worktree
 
     """
-    def __init__(self):
-        super().__init__('init')
 
-    def add_arguments(self,
-                      git,
-                      gitproject,
-                      project,
-                      parser_manager,
-                      plugin_manager):
+    def __init__(self):
+        super().__init__("init")
+
+    def add_arguments(
+        self, git, gitproject, project, parser_manager, plugin_manager
+    ):
         """Add arguments for 'git project init.'"""
         # init
-        init_parser = add_top_level_command(parser_manager,
-                                            'init',
-                                            'init',
-                                            help='Initialize project')
+        init_parser = add_top_level_command(
+            parser_manager, "init", "init", help="Initialize project"
+        )
 
         add_plugin_version_argument(init_parser)
 

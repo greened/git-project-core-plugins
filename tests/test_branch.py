@@ -23,81 +23,82 @@
 
 from pathlib import Path
 
-from git_project_core_plugins import BranchPlugin
 import common
 
-def test_add_arguments(reset_directory,
-                       git,
-                       gitproject,
-                       project,
-                       parser_manager,
-                       plugin_manager):
+from git_project_core_plugins import BranchPlugin
+
+
+def test_add_arguments(
+    reset_directory, git, gitproject, project, parser_manager, plugin_manager
+):
     plugin = BranchPlugin()
 
-    plugin.add_arguments(git,
-                         gitproject,
-                         project,
-                         parser_manager,
-                         plugin_manager)
+    plugin.add_arguments(
+        git, gitproject, project, parser_manager, plugin_manager
+    )
 
-    branch_status_parser = parser_manager.find_parser('branch-status')
+    branch_status_parser = parser_manager.find_parser("branch-status")
 
     branch_status_args = [
-        'name_or_ref',
-        'target',
-        '--all',
-        '--all-user',
+        "name_or_ref",
+        "target",
+        "--all",
+        "--all-user",
     ]
 
     common.check_args(branch_status_parser, branch_status_args)
 
-    assert branch_status_parser.get_default('func').__name__ == 'command_branch_status'
+    assert (
+        branch_status_parser.get_default("func").__name__
+        == "command_branch_status"
+    )
 
-    branch_prune_parser = parser_manager.find_parser('branch-prune')
+    branch_prune_parser = parser_manager.find_parser("branch-prune")
 
     branch_prune_args = [
-        'name_or_ref',
-        '--all-user',
-        '--force',
-        '--no-ask',
-        '--keep-remote-branch',
+        "name_or_ref",
+        "--all-user",
+        "--force",
+        "--no-ask",
+        "--keep-remote-branch",
     ]
 
     common.check_args(branch_prune_parser, branch_prune_args)
 
-    assert branch_prune_parser.get_default('func').__name__ == 'command_branch_prune'
+    assert (
+        branch_prune_parser.get_default("func").__name__
+        == "command_branch_prune"
+    )
 
-def test_branch_status(reset_directory,
-                       git,
-                       gitproject,
-                       project,
-                       parser_manager,
-                       plugin_manager,
-                       capsys,
-                       script_runner):
+
+def test_branch_status(
+    reset_directory,
+    git,
+    gitproject,
+    project,
+    parser_manager,
+    plugin_manager,
+    capsys,
+    script_runner,
+):
     plugin = BranchPlugin()
 
-    plugin.add_arguments(git,
-                         gitproject,
-                         project,
-                         parser_manager,
-                         plugin_manager)
+    plugin.add_arguments(
+        git, gitproject, project, parser_manager, plugin_manager
+    )
 
-    branch_status_parser = parser_manager.find_parser('branch-status')
+    branch_status_parser = parser_manager.find_parser("branch-status")
 
-    command_branch_status = branch_status_parser.get_default('func')
+    command_branch_status = branch_status_parser.get_default("func")
 
     clargs = {
-        'name_or_ref': None,
-        'all_user': False,
-        'all': True,
-        'target': None,
+        "name_or_ref": None,
+        "all_user": False,
+        "all": True,
+        "target": None,
     }
 
-    command_branch_status(git,
-                          gitproject,
-                          project,
-                          common.AttrDict(clargs))
+    command_branch_status(git, gitproject, project, common.AttrDict(clargs))
 
     captured = capsys.readouterr()
 
@@ -115,45 +116,43 @@ refs/heads/unmerged                          no      no
 -----------------------------------------------------------
 """
     assert captured.out == expected
-    assert captured.err == ''
+    assert captured.err == ""
 
-    ret = script_runner.run('git-project', 'branch', 'status', '--all')
+    ret = script_runner.run("git-project", "branch", "status", "--all")
 
     assert ret.success
     assert ret.stdout == expected
-    assert ret.stderr == ''
+    assert ret.stderr == ""
 
-def test_branch_prune(reset_directory,
-                      git,
-                      gitproject,
-                      project,
-                      parser_manager,
-                      plugin_manager,
-                      capsys):
+
+def test_branch_prune(
+    reset_directory,
+    git,
+    gitproject,
+    project,
+    parser_manager,
+    plugin_manager,
+    capsys,
+):
     plugin = BranchPlugin()
 
-    plugin.add_arguments(git,
-                         gitproject,
-                         project,
-                         parser_manager,
-                         plugin_manager)
+    plugin.add_arguments(
+        git, gitproject, project, parser_manager, plugin_manager
+    )
 
-    branch_prune_parser = parser_manager.find_parser('branch-prune')
+    branch_prune_parser = parser_manager.find_parser("branch-prune")
 
-    command_branch_prune = branch_prune_parser.get_default('func')
+    command_branch_prune = branch_prune_parser.get_default("func")
 
     clargs = {
-        'name_or_ref': 'merged_remote',
-        'all': True,
-        'no_ask': True,
-        'force': False,
-        'keep_remote_branch': False,
+        "name_or_ref": "merged_remote",
+        "all": True,
+        "no_ask": True,
+        "force": False,
+        "keep_remote_branch": False,
     }
 
-    command_branch_prune(git,
-                         gitproject,
-                         project,
-                         common.AttrDict(clargs))
+    command_branch_prune(git, gitproject, project, common.AttrDict(clargs))
 
     captured = capsys.readouterr()
 
@@ -163,47 +162,45 @@ branch                                       local status   remote status
 refs/heads/merged_remote                     merged         
 """
     assert captured.out == expected
-    assert captured.err == ''
+    assert captured.err == ""
 
-    assert not git.committish_exists('merged_remote')
-    assert not git.committish_exists('refs/heads/merged_remote')
-    assert not git.committish_exists('refs/remotes/origin/merged_remote')
+    assert not git.committish_exists("merged_remote")
+    assert not git.committish_exists("refs/heads/merged_remote")
+    assert not git.committish_exists("refs/remotes/origin/merged_remote")
 
-def test_branch_prune_keep_remote_branch(reset_directory,
-                                         git,
-                                         gitproject,
-                                         project,
-                                         parser_manager,
-                                         plugin_manager,
-                                         capsys):
+
+def test_branch_prune_keep_remote_branch(
+    reset_directory,
+    git,
+    gitproject,
+    project,
+    parser_manager,
+    plugin_manager,
+    capsys,
+):
     plugin = BranchPlugin()
 
-    plugin.add_arguments(git,
-                         gitproject,
-                         project,
-                         parser_manager,
-                         plugin_manager)
+    plugin.add_arguments(
+        git, gitproject, project, parser_manager, plugin_manager
+    )
 
-    branch_prune_parser = parser_manager.find_parser('branch-prune')
+    branch_prune_parser = parser_manager.find_parser("branch-prune")
 
-    command_branch_prune = branch_prune_parser.get_default('func')
+    command_branch_prune = branch_prune_parser.get_default("func")
 
     # Guard against a false pass.  The remote copy has to be there before the
     # prune, or the assertion below holds no matter what prune does.
-    assert git.committish_exists('refs/remotes/origin/merged_remote')
+    assert git.committish_exists("refs/remotes/origin/merged_remote")
 
     clargs = {
-        'name_or_ref': 'merged_remote',
-        'all': True,
-        'no_ask': True,
-        'force': False,
-        'keep_remote_branch': True,
+        "name_or_ref": "merged_remote",
+        "all": True,
+        "no_ask": True,
+        "force": False,
+        "keep_remote_branch": True,
     }
 
-    command_branch_prune(git,
-                         gitproject,
-                         project,
-                         common.AttrDict(clargs))
+    command_branch_prune(git, gitproject, project, common.AttrDict(clargs))
 
     captured = capsys.readouterr()
 
@@ -213,73 +210,69 @@ branch                                       local status   remote status
 refs/heads/merged_remote                     merged         
 """
     assert captured.out == expected
-    assert captured.err == ''
+    assert captured.err == ""
 
     # The local branch goes, the remote copy stays.
-    assert not git.committish_exists('merged_remote')
-    assert not git.committish_exists('refs/heads/merged_remote')
-    assert git.committish_exists('refs/remotes/origin/merged_remote')
+    assert not git.committish_exists("merged_remote")
+    assert not git.committish_exists("refs/heads/merged_remote")
+    assert git.committish_exists("refs/remotes/origin/merged_remote")
 
-def test_branch_prune_script(reset_directory,
-                             git,
-                             script_runner):
+
+def test_branch_prune_script(reset_directory, git, script_runner):
     expected = """---------------------------------------------------------------------------
 branch                                       local status   remote status  
 ---------------------------------------------------------------------------
 refs/heads/merged_remote                     merged         
 """
 
-    ret = script_runner.run('git-project',
-                            'branch',
-                            'prune',
-                            'merged_remote',
-                            '--all',
-                            '--no-ask')
+    ret = script_runner.run(
+        "git-project", "branch", "prune", "merged_remote", "--all", "--no-ask"
+    )
 
     assert ret.success
     assert ret.stdout == expected
-    assert ret.stderr == ''
+    assert ret.stderr == ""
 
-    assert not git.committish_exists('merged_remote')
-    assert not git.committish_exists('refs/heads/merged_remote')
-    assert not git.committish_exists('refs/remotes/origin/merged_remote')
+    assert not git.committish_exists("merged_remote")
+    assert not git.committish_exists("refs/heads/merged_remote")
+    assert not git.committish_exists("refs/remotes/origin/merged_remote")
 
-def test_branch_status_target(reset_directory,
-                              git,
-                              gitproject,
-                              project,
-                              parser_manager,
-                              plugin_manager,
-                              capsys):
+
+def test_branch_status_target(
+    reset_directory,
+    git,
+    gitproject,
+    project,
+    parser_manager,
+    plugin_manager,
+    capsys,
+):
     plugin = BranchPlugin()
 
-    plugin.add_arguments(git,
-                         gitproject,
-                         project,
-                         parser_manager,
-                         plugin_manager)
+    plugin.add_arguments(
+        git, gitproject, project, parser_manager, plugin_manager
+    )
 
-    branch_status_parser = parser_manager.find_parser('branch-status')
+    branch_status_parser = parser_manager.find_parser("branch-status")
 
-    command_branch_status = branch_status_parser.get_default('func')
+    command_branch_status = branch_status_parser.get_default("func")
 
     clargs = {
-        'name_or_ref': None,
-        'all_user': False,
-        'all': True,
-        'target': 'master',
+        "name_or_ref": None,
+        "all_user": False,
+        "all": True,
+        "target": "master",
     }
 
-    command_branch_status(git,
-                          gitproject,
-                          project,
-                          common.AttrDict(clargs))
+    command_branch_status(git, gitproject, project, common.AttrDict(clargs))
 
-    lines = {line.split()[0]: line.split()[1]
-             for line in capsys.readouterr().out.splitlines()
-             if line.startswith('refs/heads/')}
+    lines = {
+        line.split()[0]: line.split()[1]
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("refs/heads/")
+    }
 
     # With a target, merged means merged to that branch.
-    assert lines['refs/heads/master'] == 'yes'
-    assert lines['refs/heads/unmerged'] == 'no'
-    assert lines['refs/heads/notpushed'] == 'no'
+    assert lines["refs/heads/master"] == "yes"
+    assert lines["refs/heads/unmerged"] == "no"
+    assert lines["refs/heads/notpushed"] == "no"
