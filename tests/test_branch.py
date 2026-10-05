@@ -21,7 +21,6 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-from pathlib import Path
 
 import common
 
@@ -102,19 +101,20 @@ def test_branch_status(
 
     captured = capsys.readouterr()
 
-    expected = """-----------------------------------------------------------
-branch                                       merged  pushed  
------------------------------------------------------------
-refs/heads/master                            yes     no      
-refs/heads/merged_local                      yes     no      
-refs/heads/merged_remote                     yes     yes     
-refs/heads/notpushed                         no      no      
-refs/heads/pushed                            no      yes     
-refs/heads/pushed_indirectly                 yes     yes     
-refs/heads/pushed_remote_only                yes     yes     
-refs/heads/unmerged                          no      no      
------------------------------------------------------------
-"""
+    expected = (
+        "-----------------------------------------------------------\n"
+        "branch                                       merged  pushed  \n"
+        "-----------------------------------------------------------\n"
+        "refs/heads/master                            yes     no      \n"
+        "refs/heads/merged_local                      yes     no      \n"
+        "refs/heads/merged_remote                     yes     yes     \n"
+        "refs/heads/notpushed                         no      no      \n"
+        "refs/heads/pushed                            no      yes     \n"
+        "refs/heads/pushed_indirectly                 yes     yes     \n"
+        "refs/heads/pushed_remote_only                yes     yes     \n"
+        "refs/heads/unmerged                          no      no      \n"
+        "-----------------------------------------------------------\n"
+    )
     assert captured.out == expected
     assert captured.err == ""
 
@@ -156,11 +156,12 @@ def test_branch_prune(
 
     captured = capsys.readouterr()
 
-    expected = """---------------------------------------------------------------------------
-branch                                       local status   remote status  
----------------------------------------------------------------------------
-refs/heads/merged_remote                     merged         
-"""
+    expected = (
+        "---------------------------------------------------------------------------\n"
+        "branch                                       local status   remote status  \n"
+        "---------------------------------------------------------------------------\n"
+        "refs/heads/merged_remote                     merged         \n"
+    )
     assert captured.out == expected
     assert captured.err == ""
 
@@ -204,11 +205,12 @@ def test_branch_prune_keep_remote_branch(
 
     captured = capsys.readouterr()
 
-    expected = """---------------------------------------------------------------------------
-branch                                       local status   remote status  
----------------------------------------------------------------------------
-refs/heads/merged_remote                     merged         
-"""
+    expected = (
+        "---------------------------------------------------------------------------\n"
+        "branch                                       local status   remote status  \n"
+        "---------------------------------------------------------------------------\n"
+        "refs/heads/merged_remote                     merged         \n"
+    )
     assert captured.out == expected
     assert captured.err == ""
 
@@ -219,11 +221,12 @@ refs/heads/merged_remote                     merged
 
 
 def test_branch_prune_script(reset_directory, git, script_runner):
-    expected = """---------------------------------------------------------------------------
-branch                                       local status   remote status  
----------------------------------------------------------------------------
-refs/heads/merged_remote                     merged         
-"""
+    expected = (
+        "---------------------------------------------------------------------------\n"
+        "branch                                       local status   remote status  \n"
+        "---------------------------------------------------------------------------\n"
+        "refs/heads/merged_remote                     merged         \n"
+    )
 
     ret = script_runner.run(
         "git-project", "branch", "prune", "merged_remote", "--all", "--no-ask"

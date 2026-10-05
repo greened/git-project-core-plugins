@@ -34,9 +34,7 @@ from pydoc import pager
 
 from git_project import (
     ConfigObject,
-    GitProjectException,
     Plugin,
-    Project,
     add_top_level_command,
     get_or_add_top_level_command,
 )
@@ -142,7 +140,7 @@ class Help(ConfigObject):
 # need to store large help pages in the git config and also allows later
 # versions of plugins to provide new help and not be stuck with whatever happens
 # to be stored in the config.
-_command_plugin_registry = dict()
+_command_plugin_registry: dict[str, Plugin] = {}
 
 
 def command_help(git, gitproject, project, clargs):

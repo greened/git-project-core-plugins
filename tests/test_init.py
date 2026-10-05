@@ -21,10 +21,6 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-import os
-from pathlib import Path
-
-import common
 
 from git_project_core_plugins import InitPlugin
 

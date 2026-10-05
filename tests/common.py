@@ -23,8 +23,6 @@
 
 from io import StringIO
 
-from git_project_core_plugins import Worktree
-
 
 class AttrDict(dict):
     """Turn a dictionary into an object with attributes."""
@@ -36,7 +34,6 @@ class AttrDict(dict):
 
 def check_args(actual_parser, expected):
     with StringIO() as buf:
-        buf = StringIO()
 
         actual_parser.parser.print_usage(buf)
 

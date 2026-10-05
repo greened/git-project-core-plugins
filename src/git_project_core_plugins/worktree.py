@@ -24,13 +24,11 @@
 import argparse
 import os
 import shutil
-import urllib
+import urllib.parse
 from pathlib import Path
 
 from git_project import (
     ConfigObject,
-    Git,
-    GitProject,
     GitProjectException,
     Plugin,
     Project,
@@ -87,8 +85,8 @@ def get_name_branch_path_and_refname(git, gp, clargs):
             if v == "..":
                 oi = len(parts) - i - 1
                 namepath = Path(parts[oi + 1])
-                for i in range(oi + 2, len(parts)):
-                    namepath = namepath.joinpath(parts[i])
+                for j in range(oi + 2, len(parts)):
+                    namepath = namepath.joinpath(parts[j])
                 break
         branch = str(namepath)
     path = normalize_path(git, clargs.path)
@@ -301,7 +299,7 @@ class Worktree(ScopedConfigObject):
             shutil.rmtree(path)
             for tree in trees:
                 shutil.rmtree(tree)
-        except:
+        except Exception:
             pass
 
         self._git.prune_worktree(ident)
@@ -468,7 +466,7 @@ class WorktreePlugin(Plugin):
                 Worktree.Path.subsection(),
                 str(path),
             ):
-                worktree = Worktree.get_by_path(git, project, str(path))
+                Worktree.get_by_path(git, project, str(path))
                 break
             parent = path.parent
             if parent == path:
@@ -571,7 +569,7 @@ class WorktreePlugin(Plugin):
         if main:
             return git.branch_name_to_refname(main)
 
-        branches = [branch for branch in git.iterrefnames(["refs/heads"])]
+        branches = list(git.iterrefnames(["refs/heads"]))
         while True:
             for refname in branches:
                 print(git.refname_to_branch_name(refname))
@@ -735,7 +733,7 @@ class WorktreePlugin(Plugin):
                     except KeyError:
                         raise GitProjectException(
                             f"Cannot initialize worktree layout, no remote named {remote}"
-                        )
+                        ) from None
 
                     main = self._choose_main_branch(p_git)
 

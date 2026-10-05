@@ -40,7 +40,6 @@ from git_project import (
     ConfigObject,
     GitProjectException,
     Plugin,
-    Project,
     RunnableConfigObject,
     get_or_add_top_level_command,
     run_command_with_shell,
@@ -197,7 +196,7 @@ class RunPlugin(Plugin):
 
     def __init__(self):
         super().__init__("run")
-        self.classes = dict()
+        self.classes = {}
         self.classes["run"] = self._make_alias_class("run")
 
     def _make_alias_class(self, alias):
@@ -212,7 +211,7 @@ class RunPlugin(Plugin):
             """ConfigObject protocol get_managing_command."""
             return alias
 
-        Class = type(
+        alias_class = type(
             alias + "Class",
             (RunnableConfigObject,),
             {
@@ -226,49 +225,23 @@ class RunPlugin(Plugin):
         )
 
         def cons(self, git, project_section, subsection, ident, **kwargs):
-            f"""{alias} construction.
-
-            cls: The derived class being constructed.
-
-            git: An object to query the repository and make config changes.
-
-            project_section: git config section of the active project.
-
-            subsection: An arbitrarily-long subsection appended to project_section
-
-            ident: The name of this specific {alias}.
-
-            **kwargs: Keyword arguments of property values to set upon construction.
-
-            """
-            super(Class, self).__init__(
+            # Construct one alias object.
+            super(alias_class, self).__init__(
                 git, project_section, subsection, ident, **kwargs
             )
 
         @classmethod
         def get(cls, git, project, name, **kwargs):
-            f"""Factory to construct {alias}s.
-
-            cls: The derived class being constructed.
-
-            git: An object to query the repository and make config changes.
-
-            project: The currently active Project.
-
-            name: Name of the command to run.
-
-            kwargs: Attributes to set.
-
-            """
-            return super(Class, cls).get(
+            # Look up or make one alias object.
+            return super(alias_class, cls).get(
                 git, project.get_section(), cls.subsection(), name, **kwargs
             )
 
-        Class.__init__ = cons
-        Class.get = get
+        alias_class.__init__ = cons
+        alias_class.get = get
 
-        self.classes[alias] = Class
-        return Class
+        self.classes[alias] = alias_class
+        return alias_class
 
     def _gen_runs_epilog(self, git, project, alias, runs):
         result = f"Available {alias}s:\n"
@@ -285,9 +258,9 @@ class RunPlugin(Plugin):
         return result
 
     def _add_alias_arguments(
-        self, git, gitproject, project, parser_manager, Class
+        self, git, gitproject, project, parser_manager, alias_class
     ):
-        alias = Class.get_managing_command()
+        alias = alias_class.get_managing_command()
 
         # add run
         add_parser = get_or_add_top_level_command(
@@ -309,8 +282,10 @@ class RunPlugin(Plugin):
         )
 
         def command_add_run(git, gitproject, project, clargs):
-            f"""Implement git-project add {alias}"""
-            run = Class.get(git, project, clargs.name, command=clargs.command)
+            # Implement git-project add {alias}
+            run = alias_class.get(
+                git, project, clargs.name, command=clargs.command
+            )
             project.add_item(alias, clargs.name)
             return run
 
@@ -322,7 +297,7 @@ class RunPlugin(Plugin):
 
         runs = []
         if hasattr(project, alias):
-            runs = [run for run in project.iter_multival(alias)]
+            runs = list(project.iter_multival(alias))
 
         # rm run
         rm_parser = get_or_add_top_level_command(
@@ -344,10 +319,10 @@ class RunPlugin(Plugin):
         )
 
         def command_rm_run(git, gitproject, project, clargs):
-            f"""Implement git-project rm {alias}"""
+            # Implement git-project rm {alias}
             if clargs.name not in project.iter_multival(alias):
                 raise GitProjectException(f"No {alias} named {clargs.name}")
-            run = Class.get(git, project, clargs.name)
+            run = alias_class.get(git, project, clargs.name)
             run.rm()
             print(f"Removing project {alias} {clargs.name}")
             project.rm_item(alias, clargs.name)
@@ -382,7 +357,7 @@ class RunPlugin(Plugin):
                     raise GitProjectException(
                         f'Unknown {alias} "{clargs.name}," choose one of: {{ {runs} }}'
                     )
-                run = Class.get(git, project, clargs.name)
+                run = alias_class.get(git, project, clargs.name)
 
                 translation_table = dict.fromkeys(map(ord, "{}"), None)
 
@@ -393,7 +368,7 @@ class RunPlugin(Plugin):
                     return re.sub(
                         r"\{([A-Za-z_][A-Za-z0-9_]*)\}",
                         lambda match: run.substitute_value(
-                            git, project, "{" + match.group(1) + "}", dict()
+                            git, project, "{" + match.group(1) + "}", {}
                         ),
                         option,
                     )
@@ -473,11 +448,11 @@ class RunPlugin(Plugin):
             run_config = RunConfig.get(git, project)
             for alias in run_config.iter_multival("alias"):
 
-                Class = self._make_alias_class(alias)
+                alias_class = self._make_alias_class(alias)
 
-            for Class in self.iterclasses():
+            for alias_class in self.iterclasses():
                 self._add_alias_arguments(
-                    git, gitproject, project, parser_manager, Class
+                    git, gitproject, project, parser_manager, alias_class
                 )
 
     def get_class_for(self, alias):
@@ -485,5 +460,4 @@ class RunPlugin(Plugin):
 
     def iterclasses(self):
         """Iterate over public classes for git-project run."""
-        for key, Class in self.classes.items():
-            yield Class
+        yield from self.classes.values()

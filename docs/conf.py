@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
+import importlib.metadata
+
 # Configuration file for the Sphinx documentation builder.
 #
 # For the full list of built-in configuration values, see the documentation:
@@ -28,9 +30,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "git-project-core-plugins"
-copyright = "2024, David A. Greene"
+project_copyright = "2024, David A. Greene"
 author = "David A. Greene"
-import importlib.metadata
 
 release = importlib.metadata.version("git-project-core-plugins")
 

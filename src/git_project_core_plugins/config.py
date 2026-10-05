@@ -35,7 +35,6 @@ from git_project import (
     GitProjectException,
     Plugin,
     Project,
-    RunnableConfigObject,
 )
 
 from git_project_core_plugins.common import add_plugin_version_argument

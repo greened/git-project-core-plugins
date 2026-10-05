@@ -22,24 +22,12 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 import pytest
-from git_project import ConfigObject
-from git_project.test_support import (
-    ParserManagerMock,
-    PluginMock,
-    check_config_file,
-    git,
-    git_project_runner,
-    gitproject,
-    local_repository,
-    orig_repository,
-    parser_manager,
-    plugin_manager,
-    project,
-    remote_repository,
-    reset_directory,
-)
 
 from git_project_core_plugins import ClonePlugin, InitPlugin, WorktreePlugin
+
+# Registering the module as a plugin provides its fixtures. Importing them by
+# name instead makes each fixture parameter shadow the import.
+pytest_plugins = ["git_project.test_support"]
 
 
 @pytest.fixture(scope="function")

@@ -35,7 +35,6 @@ git-project artifact rm <subsection> [<path>]
 import argparse
 import glob
 import os
-import re
 import shlex
 import shutil
 from pathlib import Path

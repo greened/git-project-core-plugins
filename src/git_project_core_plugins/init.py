@@ -30,14 +30,8 @@ git-project init
 
 """
 
-import getpass
-
 from git_project import (
-    Git,
-    GitProjectException,
     Plugin,
-    Project,
-    RunnableConfigObject,
     add_top_level_command,
 )
 

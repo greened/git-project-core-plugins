@@ -23,10 +23,7 @@
 
 import shlex
 
-import common
 from git_project.test_support import check_config_file
-
-from git_project_core_plugins import HelpPlugin
 
 
 def test_help_print_manpage(git_project_runner, git):

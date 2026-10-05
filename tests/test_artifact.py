@@ -25,7 +25,6 @@ import os
 from pathlib import Path
 
 import common
-import git_project
 import pytest
 from git_project import ConfigObject
 from git_project.test_support import check_config_file
@@ -153,7 +152,7 @@ def test_artifact_rm_items(git_project_runner, git):
     check_config_file(
         "project.artifact.worktree",
         "itempath",
-        {"{builddir}, {installdir}"},
+        {"{builddir}", "{installdir}"},
         section_present=False,
     )
 

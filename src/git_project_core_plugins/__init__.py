@@ -134,6 +134,21 @@ from .init import InitPlugin
 from .run import RunPlugin
 from .worktree import Worktree, WorktreePlugin
 
+__all__ = [
+    "Artifact",
+    "ArtifactPlugin",
+    "BranchPlugin",
+    "ClonePlugin",
+    "ConfigPlugin",
+    "Help",
+    "HelpPlugin",
+    "InitPlugin",
+    "RunPlugin",
+    "Worktree",
+    "WorktreePlugin",
+    "add_plugin_version_argument",
+]
+
 # The plugin classes document their own commands, so the reference is built
 # from them rather than kept as a second copy that drifts. ``python -OO``
 # strips the docstring, so guard against None to stay importable there.

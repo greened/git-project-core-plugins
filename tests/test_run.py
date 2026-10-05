@@ -25,7 +25,6 @@ import os
 import re
 from pathlib import Path
 
-import common
 import git_project
 from git_project.test_support import check_config_file
 
@@ -58,8 +57,8 @@ def test_run_add_arguments(reset_directory, project, git_project_runner):
 
 def test_run_get_no_repo(reset_directory, git, project):
     plugin = RunPlugin()
-    Run = plugin.get_class_for("run")
-    run = Run.get(git, project, "test")
+    run_class = plugin.get_class_for("run")
+    run = run_class.get(git, project, "test")
 
     assert not hasattr(run, "command")
     assert not hasattr(run, "description")
@@ -67,8 +66,8 @@ def test_run_get_no_repo(reset_directory, git, project):
 
 def test_run_get_with_repo(reset_directory, run_git, project):
     plugin = RunPlugin()
-    Run = plugin.get_class_for("run")
-    run = Run.get(run_git, project, "test")
+    run_class = plugin.get_class_for("run")
+    run = run_class.get(run_git, project, "test")
 
     assert run.command == "make test"
     assert run.description == "Run tests"
@@ -76,14 +75,14 @@ def test_run_get_with_repo(reset_directory, run_git, project):
 
 def test_run_get_managing_command():
     plugin = RunPlugin()
-    Run = plugin.get_class_for("run")
-    assert Run.get_managing_command() == "run"
+    run_class = plugin.get_class_for("run")
+    assert run_class.get_managing_command() == "run"
 
 
 def test_run_get_kwargs(reset_directory, run_git, project):
     plugin = RunPlugin()
-    Run = plugin.get_class_for("run")
-    run = Run.get(run_git, project, "test", command="test command")
+    run_class = plugin.get_class_for("run")
+    run = run_class.get(run_git, project, "test", command="test command")
 
     assert run.command == "test command"
     assert run.description == "Run tests"
