@@ -41,7 +41,7 @@ from pathlib import Path
 
 from git_project import (
     ConfigObject,
-    GitProjectException,
+    GitProjectError,
     Plugin,
     SubstitutableConfigObject,
     add_top_level_command,
@@ -82,7 +82,7 @@ def remove_artifact_path(fullpath, git=None):
     empty path removes nothing.
 
     A match that is a protected path, or that contains one, raises
-    GitProjectException before anything is removed. The protected paths are
+    GitProjectError before anything is removed. The protected paths are
     the root, the home directory and, when git is given, the working copy
     and the git common dir.
 
@@ -109,7 +109,7 @@ def remove_artifact_path(fullpath, git=None):
         resolved = Path(path).resolve()
         for guard in protected:
             if guard == resolved or guard.is_relative_to(resolved):
-                raise GitProjectException(
+                raise GitProjectError(
                     f"Refusing to remove {path}: it is or contains {guard}"
                 )
 

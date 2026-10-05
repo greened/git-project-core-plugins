@@ -38,7 +38,7 @@ import shlex
 
 from git_project import (
     ConfigObject,
-    GitProjectException,
+    GitProjectError,
     Plugin,
     RunnableConfigObject,
     get_or_add_top_level_command,
@@ -321,7 +321,7 @@ class RunPlugin(Plugin):
         def command_rm_run(git, gitproject, project, clargs):
             # Implement git-project rm {alias}
             if clargs.name not in project.iter_multival(alias):
-                raise GitProjectException(f"No {alias} named {clargs.name}")
+                raise GitProjectError(f"No {alias} named {clargs.name}")
             run = alias_class.get(git, project, clargs.name)
             run.rm()
             print(f"Removing project {alias} {clargs.name}")
@@ -354,7 +354,7 @@ class RunPlugin(Plugin):
                 run_config.add_item("alias", clargs.name)
             else:
                 if clargs.name not in runs:
-                    raise GitProjectException(
+                    raise GitProjectError(
                         f'Unknown {alias} "{clargs.name}," choose one of: {{ {runs} }}'
                     )
                 run = alias_class.get(git, project, clargs.name)

@@ -32,7 +32,7 @@ git-project config [--add] [--unset] <name> [<value>]
 
 from git_project import (
     ConfigObject,
-    GitProjectException,
+    GitProjectError,
     Plugin,
     Project,
 )
@@ -56,9 +56,9 @@ def command_config(git, gitproject, project, clargs):
 
     if not exister(git, project.get_section(), subsection, ident):
         if ident:
-            raise GitProjectException(f"{classname} '{ident}' does not exist")
+            raise GitProjectError(f"{classname} '{ident}' does not exist")
         else:
-            raise GitProjectException(f"No {classname} configured")
+            raise GitProjectError(f"No {classname} configured")
 
     configitem = (
         getter(git, project, ident)

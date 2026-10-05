@@ -37,7 +37,7 @@ import sys
 
 from git_project import (
     Git,
-    GitProjectException,
+    GitProjectError,
     Plugin,
     add_top_level_command,
 )
@@ -88,7 +88,7 @@ def command_branch_status(git, gitproject, project, clargs):
         elif clargs.all:
             ref = "refs/heads"
         else:
-            raise GitProjectException(
+            raise GitProjectError(
                 "merged requires branch name, pattern, --all-user or --all"
             )
     else:
@@ -145,7 +145,7 @@ def command_branch_prune(git, gitproject, project, clargs):
         if clargs.all_user:
             ref = "refs/heads/user/" + getpass.getuser()
         else:
-            raise GitProjectException(
+            raise GitProjectError(
                 "Prune requires branch name, pattern or --all-user"
             )
     else:

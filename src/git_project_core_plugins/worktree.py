@@ -29,7 +29,7 @@ from pathlib import Path
 
 from git_project import (
     ConfigObject,
-    GitProjectException,
+    GitProjectError,
     Plugin,
     Project,
     ScopedConfigObject,
@@ -72,7 +72,7 @@ def get_name_branch_path_and_refname(git, gp, clargs):
 
     """
     if not getattr(clargs, "path", None):
-        raise GitProjectException("worktree add requires a path")
+        raise GitProjectError("worktree add requires a path")
 
     name = str(Path(clargs.path).name)
     branch = name
@@ -112,7 +112,7 @@ def command_worktree_add(git, gitproject, project, clargs):
     branch_point = refname
 
     if not git.committish_exists(branch_point):
-        raise GitProjectException(
+        raise GitProjectError(
             f"Branch point {branch_point} does not exist for worktree add"
         )
 
@@ -146,7 +146,7 @@ def command_worktree_rm(git, gitproject, project, clargs):
         and not project.branch_is_merged(worktree.committish)
         and not clargs.force
     ):
-        raise GitProjectException(
+        raise GitProjectError(
             f"Worktree branch {worktree.committish} is not merged, use -f to force"
         )
 
@@ -731,7 +731,7 @@ class WorktreePlugin(Plugin):
                     try:
                         p_git.get_remote_url(remote)
                     except KeyError:
-                        raise GitProjectException(
+                        raise GitProjectError(
                             f"Cannot initialize worktree layout, no remote named {remote}"
                         ) from None
 
@@ -740,7 +740,7 @@ class WorktreePlugin(Plugin):
                     # If it's not already, convert the current workarea to a bare repository.
                     if not p_git.is_bare_repository():
                         if not p_git.workarea_is_clean():
-                            raise GitProjectException(
+                            raise GitProjectError(
                                 "Cannot initialize worktree layout, working copy not clean"
                             )
 
@@ -749,7 +749,7 @@ class WorktreePlugin(Plugin):
                         assert workarea_root.exists()
 
                         if gitdir != workarea_root / ".git":
-                            raise GitProjectException(
+                            raise GitProjectError(
                                 "Not creating worktree layout -- are you in a worktree?"
                             )
 
@@ -805,7 +805,7 @@ class WorktreePlugin(Plugin):
                         # punt and tell the user to clean them up.
                         for refname in p_git.iterrefnames(["refs/heads"]):
                             if refname != main:
-                                raise GitProjectException(
+                                raise GitProjectError(
                                     "Non-main branches detected, please push and/or delete them and try again."
                                 )
 

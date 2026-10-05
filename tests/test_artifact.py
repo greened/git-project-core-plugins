@@ -342,7 +342,7 @@ class _GuardGit:
 
 
 def test_artifact_remove_refuses_protected_paths(tmp_path, monkeypatch):
-    from git_project import GitProjectException
+    from git_project import GitProjectError
 
     from git_project_core_plugins.artifact import remove_artifact_path
 
@@ -357,14 +357,14 @@ def test_artifact_remove_refuses_protected_paths(tmp_path, monkeypatch):
 
     # Each of these is a protected path or contains one.
     for path in (workdir, container, common_dir, home, tmp_path):
-        with pytest.raises(GitProjectException, match="Refusing to remove"):
+        with pytest.raises(GitProjectError, match="Refusing to remove"):
             remove_artifact_path(str(path), git)
         assert path.exists()
 
     # A glob that matches a protected path is refused too, and removes
     # nothing, not even the matches that sort before the protected one.
     (container / "aaa").mkdir()
-    with pytest.raises(GitProjectException, match="Refusing to remove"):
+    with pytest.raises(GitProjectError, match="Refusing to remove"):
         remove_artifact_path(f"{container}/*", git)
     assert workdir.exists()
     assert (container / "aaa").exists()
@@ -377,7 +377,7 @@ def test_artifact_remove_refuses_protected_paths(tmp_path, monkeypatch):
 
 
 def test_artifact_remove_resolves_relative_common_dir(tmp_path, monkeypatch):
-    from git_project import GitProjectException
+    from git_project import GitProjectError
 
     from git_project_core_plugins.artifact import remove_artifact_path
 
@@ -395,7 +395,7 @@ def test_artifact_remove_resolves_relative_common_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(elsewhere)
     git = _GuardGit(workdir, "../..", gitdir)
 
-    with pytest.raises(GitProjectException, match="Refusing to remove"):
+    with pytest.raises(GitProjectError, match="Refusing to remove"):
         remove_artifact_path(str(common_dir), git)
     assert common_dir.exists()
 
