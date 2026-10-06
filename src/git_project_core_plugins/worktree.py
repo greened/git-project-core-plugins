@@ -22,9 +22,13 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 import argparse
+import json
 import os
+import re
+import shlex
 import shutil
 import urllib.parse
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from git_project import (
@@ -34,6 +38,7 @@ from git_project import (
     Project,
     ScopedConfigObject,
     add_top_level_command,
+    capture_command,
 )
 
 from git_project_core_plugins.common import add_plugin_version_argument
@@ -61,6 +66,38 @@ def normalize_path(git, path):
     path = path.resolve()
 
     return str(path)
+
+
+# Some source trees (i.e. go) don't work well with worktrees
+# alongside a directory named ".git" so instead create a hidden
+# directory that incorporates the last component of the url, with
+# ",git" appended if necessary.
+def get_hidden_gitdir_name(url: str):
+    result = urllib.parse.urlparse(url)
+    urlpath = Path(result.path)
+
+    # If .git is the suffix, remove it.  If ".git" is the last
+    # component, use the parent name.
+    urlname = urlpath.name
+    if urlname == ".git":
+        urlname = urlpath.parent.name
+
+    if not urlname.endswith(".git"):
+        urlname += ".git"
+
+    return "." + urlname
+
+
+# Without this the container is not a repository, so anything
+# that stands there and asks git a question gets nothing. It
+# has to be a file. A symlink or a directory named ".git"
+# brings back the go problem the hidden name avoids, because
+# go's VCS search follows a ".git" that resolves to a
+# directory and then runs "git status" against a bare clone.
+# Go walks past a ".git" file, while git and pygit2 honour it.
+def write_container_gitdir(container: Path, gitdir_name: str):
+    # Keep the pointer relative so the container still moves.
+    (container / ".git").write_text(f"gitdir: {gitdir_name}\n")
 
 
 # Determine a path and committish from args.
@@ -318,6 +355,780 @@ class Worktree(ScopedConfigObject):
                 )
 
 
+# worktree migrate
+
+_MIGRATE_MANIFEST = "git-project-migrate.json"
+
+# Each of these points git somewhere other than the clone being migrated.
+_GIT_REDIRECT_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_NAMESPACE",
+)
+
+# Files and directories git leaves in a gitdir while an operation is under
+# way. Moving a worktree in that state can strand the operation.
+_IN_PROGRESS = (
+    "MERGE_HEAD",
+    "CHERRY_PICK_HEAD",
+    "REVERT_HEAD",
+    "BISECT_LOG",
+    "rebase-merge",
+    "rebase-apply",
+    "sequencer",
+)
+
+_REFS_FORMAT = "--format=%(objectname) %(refname)"
+
+
+@dataclass
+class _MigrateWorktree:
+    old: Path
+    new: Path
+    branch: str
+    name: str
+
+
+@dataclass
+class _MigratePlan:
+    top: Path = Path()
+    store_old: Path = Path()
+    store_new: Path = Path()
+    main: _MigrateWorktree | None = None
+    main_entries: list[str] = field(default_factory=list)
+    linked: list[_MigrateWorktree] = field(default_factory=list)
+    # (key, new value, prior value or None)
+    config_writes: list[tuple[str, str, str | None]] = field(
+        default_factory=list
+    )
+    stale_config: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    refusals: list[str] = field(default_factory=list)
+    ref_snapshot: list[str] = field(default_factory=list)
+    core_bare: str | None = None
+    head_oid: str = ""
+
+
+def _git(*args):
+    """Run git with an argument list, no shell, and return its output."""
+    return capture_command(["git", *args], show_error=False).decode()
+
+
+def _git_or_none(*args):
+    """Like _git, but return None when git exits with an error."""
+    try:
+        return _git(*args)
+    except Exception:
+        return None
+
+
+def _parse_worktree_list(output):
+    """Parse ``git worktree list --porcelain -z``, one dict per worktree."""
+    records = []
+    record: dict[str, str] = {}
+    for item in output.split("\0"):
+        if not item:
+            if record:
+                records.append(record)
+            record = {}
+            continue
+        key, _, value = item.partition(" ")
+        record[key] = value
+    if record:
+        records.append(record)
+    return records
+
+
+def _migrate_dir_name(branch):
+    return branch.replace("/", "-")
+
+
+def _check_worktree(plan, path, record, top):
+    """Add a refusal for each reason the worktree at path cannot move."""
+    refusals = plan.refusals
+    if "locked" in record:
+        refusals.append(f"{path} is locked")
+    if "prunable" in record:
+        refusals.append(f"{path} is prunable")
+    if not path.is_dir():
+        refusals.append(f"{path} is missing")
+        return
+    if "branch" not in record:
+        refusals.append(f"{path} has a detached HEAD")
+
+    status = _git_or_none(
+        "-C",
+        str(path),
+        "--no-optional-locks",
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    )
+    if status is None:
+        refusals.append(f"{path}: cannot read git status")
+    elif status:
+        refusals.append(f"{path} has uncommitted changes or untracked files")
+
+    gitdir = _git_or_none("-C", str(path), "rev-parse", "--absolute-git-dir")
+    if gitdir is None:
+        refusals.append(f"{path}: cannot find its git directory")
+    else:
+        gitdir_path = Path(gitdir.strip())
+        for name in _IN_PROGRESS:
+            if os.path.lexists(gitdir_path / name):
+                refusals.append(
+                    f"{path} has {name}, finish or abort that operation first"
+                )
+        # It would keep naming the old path. The main worktree's file is
+        # checked with the store's config.
+        config_worktree = gitdir_path / "config.worktree"
+        if path != top and config_worktree.is_file():
+            if _git_or_none(
+                "config", "-f", str(config_worktree), "core.worktree"
+            ):
+                refusals.append(f"{config_worktree} sets core.worktree")
+
+    if os.path.lexists(path / ".gitmodules"):
+        refusals.append(f"{path} has submodules")
+    sparse = _git_or_none(
+        "-C", str(path), "config", "--bool", "core.sparseCheckout"
+    )
+    if sparse is not None and sparse.strip() == "true":
+        refusals.append(f"{path} has a sparse checkout")
+    # The index reset in the new main worktree drops these bits.
+    tags = _git_or_none("-C", str(path), "ls-files", "-v", "-z")
+    if tags is None:
+        refusals.append(f"{path}: cannot list the index")
+    elif any(
+        item[:1].islower() or item[:1] == "S" for item in tags.split("\0")
+    ):
+        refusals.append(f"{path} has assume-unchanged or skip-worktree files")
+
+    if path != top:
+        if path.is_relative_to(top):
+            refusals.append(f"{path} is inside {top}")
+        if path.stat().st_dev != top.stat().st_dev:
+            refusals.append(f"{path} is on a different filesystem from {top}")
+
+
+def _plan_migration(git, project):
+    """Work out every step of a migration without changing anything. Collect
+    every reason to refuse that it finds. Some basic checks stop early.
+
+    """
+    plan = _MigratePlan()
+
+    for var in _GIT_REDIRECT_VARS:
+        if var in os.environ:
+            plan.refusals.append(f"{var} is set")
+    if plan.refusals:
+        return plan
+
+    version = re.search(r"(\d+)\.(\d+)", _git("version"))
+    if not version or (int(version[1]), int(version[2])) < (2, 36):
+        plan.refusals.append("git 2.36 or later is required")
+        return plan
+
+    common = _git_or_none(
+        "-C",
+        os.getcwd(),
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-common-dir",
+    )
+    if common is None:
+        plan.refusals.append("not in a git repository")
+        return plan
+    store_old = Path(common.strip()).resolve()
+    top = store_old.parent
+    bare = _git_or_none(
+        "--git-dir", str(store_old), "config", "--bool", "core.bare"
+    )
+    if (
+        store_old.name != ".git"
+        or not store_old.is_dir()
+        or (bare is not None and bare.strip() == "true")
+    ):
+        plan.refusals.append("already converted or not a main clone")
+        return plan
+    plan.top = top
+    plan.store_old = store_old
+    plan.core_bare = bare.strip() if bare is not None else None
+    gitdir_args = ("--git-dir", str(store_old))
+
+    # Either would keep the store non-bare after the migration sets core.bare.
+    config = store_old / "config"
+    if _git_or_none("config", "-f", str(config), "core.worktree"):
+        plan.refusals.append(f"{config} sets core.worktree")
+    config_worktree = store_old / "config.worktree"
+    if config_worktree.is_file():
+        for key in ("core.bare", "core.worktree"):
+            if _git_or_none("config", "-f", str(config_worktree), key):
+                plan.refusals.append(f"{config_worktree} sets {key}")
+    # The repair writes absolute links, which would silently drop the mode.
+    for key in ("extensions.relativeWorktrees", "worktree.useRelativePaths"):
+        value = _git_or_none(*gitdir_args, "config", "--get", key)
+        if value is None:
+            continue
+        flag = _git_or_none(*gitdir_args, "config", "--bool", "--get", key)
+        if flag is None:
+            plan.refusals.append(f"{key} is not a boolean")
+        elif flag.strip() != "false":
+            plan.refusals.append(f"{key} is true")
+
+    records = _parse_worktree_list(
+        _git("-C", str(top), "worktree", "list", "--porcelain", "-z")
+    )
+    if not records or Path(records[0]["worktree"]).resolve() != top:
+        plan.refusals.append(f"{top} is not the main worktree")
+        return plan
+    for record in records:
+        _check_worktree(plan, Path(record["worktree"]).resolve(), record, top)
+
+    ns = project.get_section()
+
+    main_branch = None
+    for value in (
+        _git_or_none(*gitdir_args, "config", "--get-all", f"{ns}.branch") or ""
+    ).splitlines():
+        branch = git.refname_to_branch_name(value.strip())
+        if (
+            _git_or_none(
+                *gitdir_args,
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/heads/{branch}",
+            )
+            is not None
+        ):
+            main_branch = branch
+            break
+    if main_branch is None:
+        refname = git.get_main_branch()
+        if refname:
+            main_branch = git.refname_to_branch_name(refname)
+    if main_branch is None:
+        plan.refusals.append("cannot determine the main branch")
+        return plan
+    main_ref = records[0].get("branch")
+    if main_ref is not None and main_ref != f"refs/heads/{main_branch}":
+        plan.refusals.append(
+            f"main clone has {git.refname_to_branch_name(main_ref)} "
+            f"checked out, not {main_branch}"
+        )
+
+    remotes = _git_or_none(*gitdir_args, "config", "--get-all", f"{ns}.remote")
+    remote = remotes.splitlines()[0].strip() if remotes else "origin"
+    # The url can hold a credential, so it is never printed or stored.
+    url = _git_or_none(*gitdir_args, "config", "--get", f"remote.{remote}.url")
+    if not url or not url.strip():
+        plan.refusals.append(f"remote {remote} has no url")
+        return plan
+    store_name = get_hidden_gitdir_name(url.strip())
+    store_new = top / store_name
+    if store_name in (".", "..", ".git") or store_new.resolve().parent != top:
+        plan.refusals.append(
+            f"remote {remote} gives an unusable directory name"
+        )
+        return plan
+    plan.store_new = store_new
+    if os.path.lexists(store_new):
+        plan.refusals.append(f"{store_new} already exists")
+
+    worktrees = [(top, main_branch, _migrate_dir_name(main_branch))]
+    prefix = f"{top.name}-"
+    for record in records[1:]:
+        path = Path(record["worktree"]).resolve()
+        branch = git.refname_to_branch_name(record.get("branch", ""))
+        if path.name.startswith(prefix) and len(path.name) > len(prefix):
+            dirname = path.name[len(prefix) :]
+        else:
+            dirname = _migrate_dir_name(branch)
+        worktrees.append((path, branch, dirname))
+
+    dirnames: set[str] = set()
+    names: set[str] = set()
+    for old, branch, dirname in worktrees:
+        new = top / dirname
+        if (
+            not dirname
+            or dirname in (".", "..", ".git", store_name)
+            or "/" in dirname
+            or new.resolve().parent != top
+        ):
+            plan.refusals.append(
+                f"cannot use {dirname!r} as the directory for {old}"
+            )
+            continue
+        if dirname in dirnames:
+            plan.refusals.append(f"{new} is the target of two worktrees")
+        dirnames.add(dirname)
+        if os.path.lexists(new):
+            plan.refusals.append(f"{new} already exists")
+
+        pathsection = f"{ns}.worktreepath.{old}"
+        name = git.config.get_item(pathsection, "worktree")
+        if name:
+            plan.stale_config.append(f"{pathsection}.worktree")
+        else:
+            name = dirname
+        if name in names:
+            plan.refusals.append(f"worktree name {name} is used twice")
+        names.add(name)
+        section = f"{ns}.worktree.{name}"
+        prior_path = git.config.get_item(section, "path")
+        if prior_path is not None and Path(prior_path).resolve() != old:
+            plan.refusals.append(
+                f"{section}.path already names another worktree"
+            )
+        newsection = f"{ns}.worktreepath.{new}"
+        plan.config_writes += [
+            (f"{section}.path", str(new), prior_path),
+            (
+                f"{section}.committish",
+                branch,
+                git.config.get_item(section, "committish"),
+            ),
+            (
+                f"{newsection}.worktree",
+                name,
+                git.config.get_item(newsection, "worktree"),
+            ),
+        ]
+
+        worktree = _MigrateWorktree(old, new, branch, name)
+        if old == top:
+            plan.main = worktree
+        else:
+            plan.linked.append(worktree)
+
+    if plan.main is None:
+        return plan
+
+    plan.main_entries = sorted(set(os.listdir(top)) - {".git"})
+    top_dev = top.stat().st_dev
+    for entry in plan.main_entries:
+        if os.lstat(top / entry).st_dev != top_dev:
+            plan.refusals.append(f"{top / entry} is a mount point")
+
+    # A value naming an old path keeps naming it after the move. Report the
+    # key only, since a value may hold a credential. Match whole paths, also
+    # after a flag such as -I, so /x/proj does not match /x/proj-topic or
+    # /y/x/proj.
+    olds = [
+        (
+            str(old),
+            re.compile(
+                r"(?:(?<![^\s:;,=\"'])|(?<=(?<![^\s:;,=\"'])-[A-Za-z]))"
+                + re.escape(str(old))
+                + r"(?![^/\s:;,=)\"'])"
+            ),
+        )
+        for old, _, _ in worktrees
+    ]
+    lowns = ns.lower()
+    config_list = _git_or_none(*gitdir_args, "config", "--local", "-z", "-l")
+    for item in (config_list or "").split("\0"):
+        key, _, value = item.partition("\n")
+        lowkey = key.lower()
+        # Migrate rewrites these or reports them as stale.
+        if (
+            not lowkey.startswith(f"{lowns}.")
+            or lowkey.startswith(f"{lowns}.worktreepath.")
+            or (
+                lowkey.startswith(f"{lowns}.worktree.")
+                and lowkey.endswith(".path")
+            )
+        ):
+            continue
+        for old, pattern in olds:
+            if pattern.search(value):
+                plan.warnings.append(f"{key} holds the old path {old}")
+                break
+
+    plan.ref_snapshot = sorted(
+        _git(*gitdir_args, "for-each-ref", _REFS_FORMAT).splitlines()
+    )
+    plan.head_oid = _git(*gitdir_args, "rev-parse", "HEAD").strip()
+
+    return plan
+
+
+def _plan_steps(plan, main):
+    """Return the steps of a plan as printable lines."""
+    top = plan.top
+    lines = [f"write {plan.store_old / _MIGRATE_MANIFEST}"]
+    for worktree in plan.linked:
+        lines.append(
+            shlex.join(
+                [
+                    "git",
+                    "-C",
+                    str(top),
+                    "worktree",
+                    "move",
+                    str(worktree.old),
+                    str(worktree.new),
+                ]
+            )
+        )
+    lines.append(
+        shlex.join(
+            [
+                "git",
+                "-C",
+                str(top),
+                "worktree",
+                "add",
+                "--force",
+                "--no-checkout",
+                str(main.new),
+                main.branch,
+            ]
+        )
+    )
+    for name in ("config.worktree", "logs/HEAD"):
+        if (plan.store_old / name).is_file():
+            lines.append(
+                f"copy {plan.store_old / name} -> "
+                f"the git directory of {main.new}"
+            )
+    for entry in plan.main_entries:
+        lines.append(f"rename {top / entry} -> {main.new / entry}")
+    lines.append(shlex.join(["git", "-C", str(main.new), "reset", "-q"]))
+    gitdir = f"--git-dir={plan.store_old}"
+    lines.append(shlex.join(["git", gitdir, "config", "core.bare", "true"]))
+    lines.append(
+        shlex.join(
+            [
+                "git",
+                gitdir,
+                "update-ref",
+                "--no-deref",
+                "-m",
+                "worktree migrate",
+                "HEAD",
+                plan.head_oid,
+            ]
+        )
+    )
+    lines.append(f"rename {plan.store_old} -> {plan.store_new}")
+    lines.append(f"write {top / '.git'}: gitdir: {plan.store_new.name}")
+    lines.append(
+        shlex.join(
+            [
+                "git",
+                f"--git-dir={plan.store_new}",
+                "worktree",
+                "repair",
+                str(main.new),
+                *[str(worktree.new) for worktree in plan.linked],
+            ]
+        )
+    )
+    for key, value, _ in plan.config_writes:
+        lines.append(f"set {key} = {value}")
+    return lines
+
+
+def _print_plan(plan):
+    if plan.main is not None:
+        for line in _plan_steps(plan, plan.main):
+            print(line)
+    for key in plan.stale_config:
+        print(f"stale: {key} names an old path and is left in place")
+    for warning in plan.warnings:
+        print(f"warn: {warning}")
+    for refusal in plan.refusals:
+        print(f"refuse: {refusal}")
+
+
+def _write_manifest(path, manifest):
+    """Replace the manifest at path in one step, never half written."""
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w") as file:
+        file.write(json.dumps(manifest, indent=2) + "\n")
+        file.flush()
+        os.fsync(file.fileno())
+    os.replace(tmp, path)
+
+
+def _worktree_record(worktree):
+    return {
+        "old": str(worktree.old),
+        "new": str(worktree.new),
+        "branch": worktree.branch,
+        "name": worktree.name,
+    }
+
+
+def _verify(plan, worktrees):
+    """Raise GitProjectError unless the migrated layout matches the plan."""
+    store = str(plan.store_new)
+    problems = []
+
+    bare = _git_or_none(
+        "--git-dir", store, "rev-parse", "--is-bare-repository"
+    )
+    if bare is None or bare.strip() != "true":
+        problems.append(f"{store} is not bare")
+
+    records = _parse_worktree_list(
+        _git("--git-dir", store, "worktree", "list", "--porcelain", "-z")
+    )
+    found = {
+        Path(record["worktree"]).resolve(): record.get("branch")
+        for record in records
+    }
+    expected: dict[Path, str | None] = {plan.store_new: None}
+    for worktree in worktrees:
+        expected[worktree.new] = f"refs/heads/{worktree.branch}"
+    if found != expected:
+        problems.append("the worktree list does not match the plan")
+
+    for worktree in worktrees:
+        status = _git_or_none(
+            "-C", str(worktree.new), "status", "--porcelain", "-z"
+        )
+        if status is None or status:
+            problems.append(f"{worktree.new} is not clean")
+
+    refs = sorted(
+        _git("--git-dir", store, "for-each-ref", _REFS_FORMAT).splitlines()
+    )
+    if refs != plan.ref_snapshot:
+        problems.append("the refs changed")
+
+    if problems:
+        raise GitProjectError("verify failed: " + "; ".join(problems))
+
+
+def _apply(plan, main, git, project):
+    """Carry out a plan, journaling each step into the manifest. Stop at the
+    first failure.
+
+    """
+    top = plan.top
+    store_new = plan.store_new
+    worktrees = [main, *plan.linked]
+    manifest_path = plan.store_old / _MIGRATE_MANIFEST
+    manifest: dict = {
+        "version": 1,
+        "top": str(top),
+        "store_old": str(plan.store_old),
+        "store_new": str(store_new),
+        "core_bare": plan.core_bare,
+        "head_ref": f"refs/heads/{main.branch}",
+        "head_oid": plan.head_oid,
+        "main": _worktree_record(main),
+        "linked": [_worktree_record(worktree) for worktree in plan.linked],
+        "main_entries": plan.main_entries,
+        "config_writes": [
+            {"key": key, "value": value, "prior": prior}
+            for key, value, prior in plan.config_writes
+        ],
+        "current_step": None,
+        "steps_done": [],
+        "complete": False,
+    }
+
+    # Journal a step before it runs, so a hard stop still names the step
+    # that may be half done.
+    def start(step):
+        manifest["current_step"] = step
+        _write_manifest(manifest_path, manifest)
+
+    def done(step):
+        manifest["steps_done"].append(step)
+        manifest["current_step"] = None
+        _write_manifest(manifest_path, manifest)
+
+    step = "manifest"
+    # BaseException, so a Ctrl-C mid-step still records where it stopped.
+    try:
+        _write_manifest(manifest_path, manifest)
+
+        for worktree in plan.linked:
+            step = f"move_linked {worktree.new.name}"
+            start(step)
+            _git(
+                "-C",
+                str(top),
+                "worktree",
+                "move",
+                str(worktree.old),
+                str(worktree.new),
+            )
+            done(step)
+
+        step = "add_main"
+        start(step)
+        _git(
+            "-C",
+            str(top),
+            "worktree",
+            "add",
+            "--force",
+            "--no-checkout",
+            str(main.new),
+            main.branch,
+        )
+        done(step)
+
+        step = "copy_main_state"
+        start(step)
+        admin = Path(
+            _git(
+                "-C", str(main.new), "rev-parse", "--absolute-git-dir"
+            ).strip()
+        )
+        # The main worktree's own config and HEAD reflog live in the store,
+        # which is about to become bare. Carry them to the new worktree.
+        if (plan.store_old / "config.worktree").is_file():
+            shutil.copy2(
+                plan.store_old / "config.worktree", admin / "config.worktree"
+            )
+        if (plan.store_old / "logs" / "HEAD").is_file():
+            (admin / "logs").mkdir(exist_ok=True)
+            shutil.copy2(
+                plan.store_old / "logs" / "HEAD", admin / "logs" / "HEAD"
+            )
+        done(step)
+
+        for entry in plan.main_entries:
+            step = f"move_entry {entry}"
+            start(step)
+            os.rename(top / entry, main.new / entry)
+            done(step)
+
+        step = "reset_index"
+        start(step)
+        _git("-C", str(main.new), "reset", "-q")
+        done(step)
+
+        gitdir = f"--git-dir={plan.store_old}"
+        step = "set_bare"
+        start(step)
+        _git(gitdir, "config", "core.bare", "true")
+        done(step)
+
+        step = "detach_head"
+        start(step)
+        _git(
+            gitdir,
+            "update-ref",
+            "--no-deref",
+            "-m",
+            "worktree migrate",
+            "HEAD",
+            plan.head_oid,
+        )
+        done(step)
+
+        step = "rename_store"
+        start(step)
+        # Set first, so a stop after the rename still finds the manifest.
+        manifest_path = store_new / _MIGRATE_MANIFEST
+        os.rename(plan.store_old, store_new)
+        done(step)
+
+        step = "write_pointer"
+        start(step)
+        write_container_gitdir(top, store_new.name)
+        done(step)
+
+        # repair finds each admin dir by the name in the worktree's .git
+        # file. _verify catches a worktree it could not reconnect.
+        step = "repair"
+        start(step)
+        _git(
+            "--git-dir",
+            str(store_new),
+            "worktree",
+            "repair",
+            *[str(worktree.new) for worktree in worktrees],
+        )
+        done(step)
+
+        step = "write_config"
+        start(step)
+        git.reinit(store_new)
+        git.validate_config()
+        section = project.get_section()
+        for worktree in worktrees:
+            # A fresh Project each time, so each worktree scopes only itself.
+            Worktree.get(
+                git,
+                Project.get(git, section),
+                worktree.name,
+                path=str(worktree.new),
+                committish=worktree.branch,
+            )
+        done(step)
+
+        step = "verify"
+        start(step)
+        _verify(plan, worktrees)
+        manifest["complete"] = True
+        done(step)
+    except BaseException as exception:
+        manifest["failed_step"] = step
+        manifest["error"] = str(exception)
+        if not manifest_path.parent.is_dir():
+            # The stop came inside rename_store, before the rename.
+            manifest_path = plan.store_old / _MIGRATE_MANIFEST
+        try:
+            _write_manifest(manifest_path, manifest)
+        except OSError:
+            pass
+        steps = ", ".join(manifest["steps_done"]) or "none"
+        message = (
+            f"worktree migrate failed at step {step}. Steps done: {steps}. "
+            f"The manifest is {manifest_path}. To undo the steps done, see "
+            "Manual rollback in the worktree help."
+        )
+        if not isinstance(exception, Exception):
+            print(message)
+            raise
+        raise GitProjectError(message) from exception
+
+
+def command_worktree_migrate(git, gitproject, project, clargs):
+    """Implement git-project worktree migrate."""
+    plan = _plan_migration(git, project)
+    _print_plan(plan)
+
+    if plan.refusals:
+        raise GitProjectError(
+            "worktree migrate refused: " + "; ".join(plan.refusals)
+        )
+
+    if not clargs.apply:
+        ns = project.get_section()
+        print(
+            "Dry run, the migration changed nothing. git-project itself may "
+            f"have set {ns}.branch and {ns}.remote, if they were unset. Run "
+            "with --apply to migrate."
+        )
+        return 0
+
+    if plan.main is None:
+        raise GitProjectError("worktree migrate found no main worktree")
+    _apply(plan, plan.main, git, project)
+    print(f"Migrated {plan.top}. The manifest is in {plan.store_new}.")
+    return 0
+
+
 class WorktreePlugin(Plugin):
     """
     The worktree command manages worktrees and connects them to projects.
@@ -328,6 +1139,7 @@ class WorktreePlugin(Plugin):
       git <project> worktree rm [-f] [--keep-branch] [--keep-remote-branch]
                                 <name>
       git <project> worktree config <ident> [--add] [--unset] <name> [<value>]
+      git <project> worktree migrate [--apply]
 
     ``worktree add`` creates a worktree at <name-or-path> and checks out a
     branch in it. The worktree's name is the last component of <name-or-path>.
@@ -424,11 +1236,103 @@ class WorktreePlugin(Plugin):
     be clean.  The conversion deletes every file in the top-level directory
     except the git directory, so preserve anything there that is not part of
     the repository.  Only the main branch gets a worktree, so a different
-    checked-out branch gets none, though one is easy to add afterward.
+    checked-out branch gets none, though one is easy to add afterward. To
+    convert a clone you work in, with its branches and linked worktrees, use
+    ``worktree migrate`` instead.
 
     On a repository that is already bare, ``init --worktree`` deletes nothing.
     It refuses to run while a branch other than the main one exists, because it
     cannot know which remote each branch should go to.
+
+    ``worktree migrate`` converts a flat clone, one whose ``.git`` is a
+    directory, to the worktree layout. Every branch, ref, stash and config
+    value stays. Each linked worktree moves into the top-level directory. The
+    files of the main worktree, ignored ones too, move into a worktree named
+    for the main branch. Without ``--apply`` it prints each step and changes
+    nothing. One exception applies to every git-project command: before the
+    command runs, git-project may set ``<project>.branch`` and
+    ``<project>.remote`` when they are unset.
+
+    The main branch is the first branch the project configures that exists
+    locally. Failing that, it is ``main``, then ``master``, then the only
+    local branch. The main clone must have it checked out. A linked worktree
+    named ``<top>-<rest>``, where <top> is the name of the top-level
+    directory, moves to ``<rest>``. Any other moves to a directory named for
+    its branch, with each ``/`` turned into ``-``. So ``proj-topic`` beside
+    ``proj`` becomes ``proj/topic``, and a worktree on ``user/feature``
+    becomes ``proj/user-feature``.
+
+    It refuses when a worktree has changes or untracked files, is locked,
+    prunable or missing, or has a detached HEAD. It refuses during a merge,
+    cherry-pick, revert, rebase or bisect. It refuses a worktree with
+    submodules, a sparse checkout, or assume-unchanged or skip-worktree
+    files. It refuses a linked worktree inside <top> or on another
+    filesystem, and a mount point in <top>. It refuses when two worktrees
+    get the same target directory or worktree name, and when a target
+    directory exists. It refuses when ``core.worktree`` is set, or when the
+    main worktree's ``config.worktree`` sets ``core.bare``. It refuses when
+    ``extensions.relativeWorktrees`` or ``worktree.useRelativePaths`` is
+    true, because the repair writes absolute links. It also refuses when the
+    project remote has no url, when GIT_DIR or a variable like it is set,
+    with git older than 2.36, and on a clone already converted. It reports
+    every reason it finds and makes no change of its own. Some basic checks,
+    such as the git version, stop it before the rest run.
+
+    Each worktree's config moves with it. A ``worktreepath`` entry for an
+    old path stays and is reported, so remove it by hand. A project value
+    that holds an old path, such as ``<project>.builddir`` set to
+    ``<old>/build``, gets a warning that names its key and not its value. The
+    warning does not stop the migration, so fix the value by hand. A tool
+    that records absolute paths, such as a Python virtualenv, may need to be
+    made again.
+
+    ``--apply`` writes the plan to ``git-project-migrate.json`` in the git
+    directory. Before each step runs, its name goes in ``current_step``.
+    When the step finishes, it is added to the ``steps_done`` list. The
+    migration stops at the first failure and names the step in
+    ``failed_step``. A hard stop, such as a kill, leaves no
+    ``failed_step``, so read ``current_step``. The error names the
+    manifest. After a stop in ``rename_store`` it is at either
+    <top>/.git or <store_new>.
+
+    Manual rollback. Undo the steps that ``steps_done`` lists, in the order
+    below. The failed step, or the current step after a hard stop, may be
+    fully done, partly done, or not done. Check it as its comment below
+    says, and undo it when it is done or partly done. Take <top>,
+    <store_new>, <main> and the other values from the manifest. <main> is
+    ``main.new`` and each <new> and <old> is a ``linked`` entry. The steps
+    ``verify``, ``repair``, ``reset_index`` and ``copy_main_state`` need
+    nothing::
+
+      # write_pointer: done when <top>/.git is a file
+      rm <top>/.git
+      # rename_store: done when <store_new> exists
+      mv <store_new> <top>/.git
+      git -C <top> worktree repair <new>...
+      # detach_head: undo it either way
+      git --git-dir=<top>/.git symbolic-ref HEAD <head_ref>
+      # set_bare: done when this prints true
+      git --git-dir=<top>/.git config core.bare
+      # set_bare, when core_bare is not null
+      git --git-dir=<top>/.git config core.bare <core_bare>
+      # set_bare, when core_bare is null
+      git --git-dir=<top>/.git config --unset core.bare
+      # each move_entry <entry>: done when <main>/<entry> exists
+      mv <main>/<entry> <top>/<entry>
+      # add_main: done when <main> exists
+      rm -f <main>/.git
+      rmdir <main>
+      git -C <top> worktree prune
+      # each move_linked: done when <new> exists
+      git -C <top> worktree repair <new>
+      git -C <top> worktree move <new> <old>
+      # then, if any move_linked was undone
+      git -C <top> worktree repair <old>...
+      # write_config: undo it either way. Set each config_writes key
+      # back to its prior value, or unset it when prior is null.
+      # last, remove the manifest
+      rm -f <top>/.git/git-project-migrate.json
+      rm -f <top>/.git/git-project-migrate.json.tmp
 
     See also::
 
@@ -539,6 +1443,22 @@ class WorktreePlugin(Plugin):
             help="Keep the branch on remotes, deleting only the local copy",
         )
 
+        # worktree migrate
+        worktree_migrate_parser = parser_manager.add_parser(
+            worktree_subparser,
+            "migrate",
+            "worktree-migrate",
+            help="Convert a flat clone to the worktree layout",
+        )
+
+        worktree_migrate_parser.set_defaults(func=command_worktree_migrate)
+
+        worktree_migrate_parser.add_argument(
+            "--apply",
+            action="store_true",
+            help="Make the changes, instead of only printing them",
+        )
+
         # add a clone option to create a worktree layout.
         clone_parser = parser_manager.find_parser("clone")
         if clone_parser:
@@ -625,36 +1545,6 @@ class WorktreePlugin(Plugin):
         clone_parser = parser_manager.find_parser("clone")
         if clone_parser:
             command_clone = clone_parser.get_default("func")
-
-            # Some source trees (i.e. go) don't work well with worktrees
-            # alongside a directory named ".git" so instead create a hidden
-            # directory that incorporates the last component of the url, with
-            # ",git" appended if necessary.
-            def get_hidden_gitdir_name(url: str):
-                result = urllib.parse.urlparse(url)
-                urlpath = Path(result.path)
-
-                # If .git is the suffix, remove it.  If ".git" is the last
-                # component, use the parent name.
-                urlname = urlpath.name
-                if urlname == ".git":
-                    urlname = urlpath.parent.name
-
-                if not urlname.endswith(".git"):
-                    urlname += ".git"
-
-                return "." + urlname
-
-            # Without this the container is not a repository, so anything
-            # that stands there and asks git a question gets nothing. It
-            # has to be a file. A symlink or a directory named ".git"
-            # brings back the go problem the hidden name avoids, because
-            # go's VCS search follows a ".git" that resolves to a
-            # directory and then runs "git status" against a bare clone.
-            # Go walks past a ".git" file, while git and pygit2 honour it.
-            def write_container_gitdir(container: Path, gitdir_name: str):
-                # Keep the pointer relative so the container still moves.
-                (container / ".git").write_text(f"gitdir: {gitdir_name}\n")
 
             def worktree_command_clone(p_git, p_gitproject, p_project, clargs):
                 if clargs.worktree:

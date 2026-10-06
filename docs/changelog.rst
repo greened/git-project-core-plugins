@@ -30,6 +30,12 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Added
+.....
+- ``worktree migrate`` converts a flat clone and its linked worktrees to the
+  worktree layout. It keeps every branch, ref, stash and config, and changes
+  nothing without ``--apply``.
+
 Changed
 .......
 - The ``artifact`` manual says that the <path> given to ``artifact rm`` is

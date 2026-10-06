@@ -73,7 +73,9 @@ fails if ``.git`` resolves to a directory there. A repository that is already
 bare when ``init --worktree`` runs keeps its name and gets no ``.git`` file,
 and its parent directory holds the worktrees. Any conversion will abort if
 the worktree is dirty. Typically, an ordinary ``git clone`` is followed
-immediately by ``git <project> init --worktree``.
+immediately by ``git <project> init --worktree``. A clone already in use, with
+its own branches and linked worktrees, is converted with ``git <project>
+worktree migrate`` instead, which keeps them all.
 
 Either route also creates a worktree for the project's main branch, so the
 layout is usable straight away.  The main branch is taken from the repository
