@@ -23,6 +23,8 @@
 
 import io
 import os
+import re
+import subprocess
 from pathlib import Path
 
 import common
@@ -552,6 +554,41 @@ def test_worktree_rm(git, git_project_runner, tmp_path_factory):
     git = git_project.Git()  # Reinitialize after the worktree went away.
 
     assert not git.committish_exists("user/test_rm")
+
+
+def test_worktree_rm_unset_builddir(git, git_project_runner, tmp_path_factory):
+    workarea = git.get_working_copy_root()
+    os.chdir(workarea)
+    git = git_project.Git()  # Reinitialize in new workarea.
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run(
+        ".*", "", "worktree", "add", "../user/test_rm", "master"
+    )
+
+    # Give the worktree a prefix but no builddir. The unset builddir must not
+    # stop rm before it reaches the prefix.
+    prefix = tmp_path_factory.mktemp("prefix")
+    section = re.sub(
+        r"\.path$",
+        "",
+        subprocess.check_output(
+            [
+                "git",
+                "config",
+                "--name-only",
+                "--get-regexp",
+                r"\.worktree\.test_rm\.path$",
+            ],
+            text=True,
+        ).strip(),
+    )
+    subprocess.check_call(["git", "config", f"{section}.prefix", str(prefix)])
+
+    git_project_runner.run(".*", "", "worktree", "rm", "test_rm")
+
+    assert not os.path.exists(workarea.parent / "user" / "test_rm")
+    assert not os.path.exists(prefix)
 
 
 def test_worktree_rm_keep_branch(

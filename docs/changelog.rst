@@ -30,6 +30,17 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Changed
+.......
+- The ``artifact`` manual says that the <path> given to ``artifact rm`` is
+  a regular expression. Escape characters such as ``{`` and ``.`` to match
+  them literally.
+
+Fixed
+.....
+- ``worktree rm`` stopped removing directories at the first one it could
+  not remove. A worktree with no builddir kept its prefix and installdir.
+  Each directory is now removed on its own.
 
 `0.0.28`_ - 2026-10-05
 ----------------------

@@ -241,7 +241,10 @@ class ArtifactPlugin(Plugin):
     associated file-system object.  The ``artifact rm`` command simply removes
     an artifact association, it does not remove the artifact itself. A
     <subsection> may hold several paths. With <path>, ``artifact rm`` removes
-    only that association. Give <path> as it was added, before substitution.
+    only that association. <path> is a regular expression that git matches
+    against each path as it was added, before substitution. Escape characters
+    such as ``{`` and ``.`` to match them literally. A <path> that matches
+    more than one path removes none of them.
 
     For example::
 

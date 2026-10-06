@@ -294,13 +294,11 @@ class Worktree(ScopedConfigObject):
         super().rm()
         self._pathsection.rm()
 
-        # TODO: Use python utils.
-        try:
-            shutil.rmtree(path)
-            for tree in trees:
-                shutil.rmtree(tree)
-        except Exception:
-            pass
+        # Remove each tree on its own, so one that is missing or unset does not
+        # leave the rest behind.
+        for tree in [path, *trees]:
+            if tree:
+                shutil.rmtree(tree, ignore_errors=True)
 
         self._git.prune_worktree(ident)
 
@@ -457,8 +455,7 @@ class WorktreePlugin(Plugin):
         plugin_manager: The active  PluginManager.
 
         """
-        path = Path.cwd()
-        path.resolve()
+        path = Path.cwd().resolve()
         while True:
             if ConfigObject.exists(
                 git,
