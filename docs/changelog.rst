@@ -38,6 +38,10 @@ Added
 
 Changed
 .......
+- core-plugins now needs git-project 0.0.41 or later. That release no
+  longer evaluates a config value as Python, so an expression such as
+  ``{branch.replace(...)}`` in a config value stays as written. Only a
+  plain ``{name}`` is replaced.
 - The ``artifact`` manual says that the <path> given to ``artifact rm`` is
   a regular expression. Escape characters such as ``{`` and ``.`` to match
   them literally.

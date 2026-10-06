@@ -362,8 +362,7 @@ class RunPlugin(Plugin):
                 translation_table = dict.fromkeys(map(ord, "{}"), None)
 
                 # An option may name a value, such as {branch}. Only a plain
-                # {name} is looked up. The substitution evaluates what it is
-                # given as Python, so anything else in braces stays text.
+                # {name} is looked up, so anything else in braces stays text.
                 def substitute_names(option):
                     return re.sub(
                         r"\{([A-Za-z_][A-Za-z0-9_]*)\}",
@@ -382,11 +381,10 @@ class RunPlugin(Plugin):
 
                 # The command runs through a shell, so each word from the
                 # command line is shell-quoted, or a ';' in one would run as
-                # shell. The quoting cannot go into the substitution itself,
-                # which evaluates every value as a Python f-string that a
-                # quote would break. So a plain placeholder stands in for each
-                # word during substitution, and the quoted word replaces it
-                # afterward.
+                # shell. The quoted words stay out of the substitution, which
+                # would expand braces in them again. So a plain placeholder
+                # stands in for each word during substitution, and the quoted
+                # word replaces it afterward.
                 token = secrets.token_hex(8)
 
                 def placeholder(name):
