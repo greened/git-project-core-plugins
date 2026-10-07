@@ -1062,9 +1062,7 @@ def test_worktree_migrate_warns_on_whole_paths_only(flat_clone, script_runner):
     ]
 
 
-def test_worktree_migrate_dry_run_writes_only_defaults(
-    flat_clone, script_runner, tmp_path
-):
+def test_worktree_migrate_dry_run_writes_no_config(flat_clone, script_runner):
     fc = flat_clone
     config = fc.top / ".git" / "config"
     _out("-C", str(fc.top), "config", "--remove-section", "project")
@@ -1074,19 +1072,8 @@ def test_worktree_migrate_dry_run_writes_only_defaults(
     result = _migrate(script_runner, fc.top)
 
     assert result.success, result.stdout + result.stderr
-    assert (
-        "git-project itself may have set project.branch and project.remote"
-        in result.stdout
-    )
-    assert _out(
-        "config", "-f", str(config), "--get-regexp", r"^project\."
-    ) == ("project.branch master\nproject.remote origin\n")
-    # Without the defaults git-project set, the config is byte for byte
-    # what it was.
-    copy = tmp_path / "config"
-    copy.write_bytes(config.read_bytes())
-    _out("config", "-f", str(copy), "--remove-section", "project")
-    assert copy.read_bytes() == config_before
+    assert "Dry run, the migration changed nothing." in result.stdout
+    assert config.read_bytes() == config_before
     files, refs, _, worktrees = _snapshot(fc)
     assert (files, refs, worktrees) == (before[0], before[1], before[3])
 
@@ -1383,6 +1370,22 @@ def test_worktree_migrate_apply(flat_clone, script_runner):
     manifest = json.loads((fc.store / "git-project-migrate.json").read_text())
     assert manifest["complete"] is True
     assert manifest["steps_done"][-1] == "verify"
+
+
+def test_worktree_migrate_apply_writes_defaults(flat_clone, script_runner):
+    fc = flat_clone
+    _out("-C", str(fc.top), "config", "--remove-section", "project")
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert result.success, result.stdout + result.stderr
+    store = str(fc.store)
+    assert _out(
+        "--git-dir", store, "config", "--get-all", "project.branch"
+    ) == ("master\n")
+    assert _out(
+        "--git-dir", store, "config", "--get-all", "project.remote"
+    ) == ("origin\n")
 
 
 @pytest.mark.parametrize("cwd", ["", "master"])

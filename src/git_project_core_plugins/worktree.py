@@ -1565,11 +1565,9 @@ def command_worktree_migrate(git, gitproject, project, clargs):
         )
 
     if not clargs.apply:
-        ns = project.get_section()
         print(
-            "Dry run, the migration changed nothing. git-project itself may "
-            f"have set {ns}.branch and {ns}.remote, if they were unset. Run "
-            "with --apply to migrate."
+            "Dry run, the migration changed nothing. Run with --apply to "
+            "migrate."
         )
         return 0
 
@@ -1724,9 +1722,7 @@ class WorktreePlugin(Plugin):
     value stays. Each linked worktree moves into the top-level directory. The
     files of the main worktree, ignored ones too, move into a worktree named
     for the main branch. Without ``--apply`` it prints each step and changes
-    nothing. One exception applies to every git-project command: before the
-    command runs, git-project may set ``<project>.branch`` and
-    ``<project>.remote`` when they are unset.
+    nothing.
 
     The main branch is the first branch the project configures that exists
     locally. Failing that, it is ``main``, then ``master``, then the only
@@ -1985,7 +1981,10 @@ class WorktreePlugin(Plugin):
             help="Convert a flat clone to the worktree layout",
         )
 
-        worktree_migrate_parser.set_defaults(func=command_worktree_migrate)
+        # A dry run must leave the config as it was.
+        worktree_migrate_parser.set_defaults(
+            func=command_worktree_migrate, write_project_defaults=False
+        )
 
         worktree_migrate_parser.add_argument(
             "--apply",

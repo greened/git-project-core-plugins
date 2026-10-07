@@ -54,6 +54,14 @@ Changed
   step. When ``verify`` finds a worktree that is not clean, it names up to
   10 of the changed or untracked paths. Like the precheck, it ignores
   ``status.showUntrackedFiles`` and ``submodule.<name>.ignore``.
+- core-plugins now needs git-project 0.0.42 or later. That release lets a
+  command turn off its writes of the project defaults.
+
+Fixed
+.....
+- A ``worktree migrate`` dry run wrote ``<project>.branch`` and
+  ``<project>.remote`` when they were unset. Now it writes nothing to the
+  config. It needs git-project 0.0.42 or later.
 
 `0.0.29`_ - 2026-10-06
 ----------------------
