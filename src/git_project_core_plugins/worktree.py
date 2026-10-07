@@ -27,6 +27,9 @@ import os
 import re
 import shlex
 import shutil
+import signal
+import subprocess
+import time
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -387,6 +390,16 @@ _IN_PROGRESS = (
 
 _REFS_FORMAT = "--format=%(objectname) %(refname)"
 
+# Long enough for a hook that sets up a virtualenv, short enough that a hung
+# hook does not hold the terminal forever.
+_POST_TIMEOUT = 600
+# A day. Popen.wait overflows on a huge value, and that would only show
+# after the migration.
+_POST_TIMEOUT_MAX = 86400
+
+# How long a hook has to exit after SIGTERM before it gets SIGKILL.
+_POST_KILL_GRACE = 5
+
 
 @dataclass
 class _MigrateWorktree:
@@ -418,6 +431,12 @@ class _MigratePlan:
     bare_at_root: bool = False
     # (commondir file, its absolute value), each rewritten as ../..
     commondirs: list[tuple[Path, str]] = field(default_factory=list)
+    # (branch, commits not on base or None when git cannot tell, base)
+    unpushed: list[tuple[str, int | None, str]] = field(default_factory=list)
+    post_key: str = ""
+    post_hook: list[str] = field(default_factory=list)
+    post_origin: str = ""
+    post_timeout: int = _POST_TIMEOUT
 
 
 def _git(*args):
@@ -672,6 +691,108 @@ def _plan_bare_at_root(git, project, plan, gitdir_args):
     )
 
 
+def _find_unpushed(plan, gitdir_args, main_branch):
+    """Record each local branch with commits that its upstream lacks. A branch
+    with no upstream, or one that is gone, is compared with the main branch.
+    When main_branch is None, such a branch is skipped.
+
+    """
+    heads = _git_or_none(
+        *gitdir_args,
+        "for-each-ref",
+        # Not :short, which gives heads/<name> when a tag has the same name.
+        "--format=%(refname)%00%(refname:lstrip=2)%00%(upstream)"
+        "%00%(upstream:lstrip=2)",
+        "refs/heads",
+    )
+    for line in (heads or "").splitlines():
+        refname, branch, upstream, upstream_short = line.split("\0")
+        if upstream and (
+            _git_or_none(
+                *gitdir_args, "rev-parse", "--verify", "--quiet", upstream
+            )
+            is not None
+        ):
+            base, base_short = upstream, upstream_short
+        elif main_branch is None or branch == main_branch:
+            continue
+        else:
+            base, base_short = f"refs/heads/{main_branch}", main_branch
+        # A "-" line is a commit the base has under another id, as after a
+        # rebase or cherry-pick, so only "+" lines count.
+        cherry = _git_or_none(*gitdir_args, "cherry", base, refname)
+        count = (
+            None
+            if cherry is None
+            else sum(entry.startswith("+") for entry in cherry.splitlines())
+        )
+        if count != 0:
+            plan.unpushed.append((branch, count, base_short))
+
+
+def _find_main_branch(git, ns, gitdir_args):
+    """Return the main branch, or None when there is none."""
+    main_branch = None
+    for value in (
+        _git_or_none(*gitdir_args, "config", "--get-all", f"{ns}.branch") or ""
+    ).splitlines():
+        branch = git.refname_to_branch_name(value.strip())
+        if (
+            _git_or_none(
+                *gitdir_args,
+                "show-ref",
+                "--verify",
+                "--quiet",
+                f"refs/heads/{branch}",
+            )
+            is not None
+        ):
+            main_branch = branch
+            break
+    if main_branch is None:
+        refname = git.get_main_branch()
+        if refname:
+            main_branch = git.refname_to_branch_name(refname)
+    return main_branch
+
+
+def _plan_unpushed_and_hook(plan, ns, gitdir_args, main_branch):
+    """List unpushed branches and plan the hook, for either form."""
+    _find_unpushed(plan, gitdir_args, main_branch)
+
+    # A key on the project section, outside the sections that worktrees and
+    # run objects own. A run alias named postmigrate would share it.
+    plan.post_key = f"{ns}.postmigrate"
+    hook = _git_or_none(*gitdir_args, "config", "--get", plan.post_key)
+    if hook is not None:
+        origin = _git_or_none(
+            *gitdir_args, "config", "--show-origin", "--get", plan.post_key
+        )
+        plan.post_origin = (origin or "").partition("\t")[0]
+        # Refuse now, while nothing has changed, rather than migrate and then
+        # fail to run the hook.
+        try:
+            plan.post_hook = shlex.split(hook)
+        except ValueError:
+            plan.refusals.append(f"{plan.post_key} is not a valid command")
+        else:
+            if not plan.post_hook:
+                plan.refusals.append(f"{plan.post_key} is empty")
+    timeout_key = f"{ns}.postmigratetimeout"
+    timeout = _git_or_none(*gitdir_args, "config", "--get", timeout_key)
+    if timeout is not None:
+        if (
+            re.fullmatch(r"[0-9]+", timeout.strip())
+            and 0 < int(timeout) <= _POST_TIMEOUT_MAX
+        ):
+            plan.post_timeout = int(timeout)
+        else:
+            plan.refusals.append(
+                f"{timeout_key} is not a whole number of seconds from 1 to "
+                f"{_POST_TIMEOUT_MAX}"
+            )
+
+
 def _plan_migration(git, project):
     """Work out every step of a migration without changing anything. Collect
     every reason to refuse that it finds. Some basic checks stop early.
@@ -740,6 +861,10 @@ def _plan_migration(git, project):
 
     if plan.bare_at_root:
         _plan_bare_at_root(git, project, plan, gitdir_args)
+        # A bare store needs no main branch, so a missing one is no refusal.
+        ns = project.get_section()
+        main_branch = _find_main_branch(git, ns, gitdir_args)
+        _plan_unpushed_and_hook(plan, ns, gitdir_args, main_branch)
         return plan
 
     records = _parse_worktree_list(
@@ -753,30 +878,12 @@ def _plan_migration(git, project):
 
     ns = project.get_section()
 
-    main_branch = None
-    for value in (
-        _git_or_none(*gitdir_args, "config", "--get-all", f"{ns}.branch") or ""
-    ).splitlines():
-        branch = git.refname_to_branch_name(value.strip())
-        if (
-            _git_or_none(
-                *gitdir_args,
-                "show-ref",
-                "--verify",
-                "--quiet",
-                f"refs/heads/{branch}",
-            )
-            is not None
-        ):
-            main_branch = branch
-            break
-    if main_branch is None:
-        refname = git.get_main_branch()
-        if refname:
-            main_branch = git.refname_to_branch_name(refname)
+    main_branch = _find_main_branch(git, ns, gitdir_args)
     if main_branch is None:
         plan.refusals.append("cannot determine the main branch")
         return plan
+    _plan_unpushed_and_hook(plan, ns, gitdir_args, main_branch)
+
     main_ref = records[0].get("branch")
     if main_ref is not None and main_ref != f"refs/heads/{main_branch}":
         plan.refusals.append(
@@ -981,7 +1088,15 @@ def _plan_steps(plan, main):
     )
     for key, value, _ in plan.config_writes:
         lines.append(f"set {key} = {value}")
-    return lines
+    return lines + _post_step(plan)
+
+
+def _post_step(plan):
+    # The key and not the command, which may hold a credential.
+    if not plan.post_hook:
+        return []
+    origin = f" from {plan.post_origin}" if plan.post_origin else ""
+    return [f"run the command in {plan.post_key}{origin}, in {plan.top}"]
 
 
 def _bare_plan_steps(plan):
@@ -1002,7 +1117,7 @@ def _bare_plan_steps(plan):
             ]
         )
     )
-    return lines
+    return lines + _post_step(plan)
 
 
 def _print_plan(plan):
@@ -1013,6 +1128,12 @@ def _print_plan(plan):
     elif plan.main is not None:
         for line in _plan_steps(plan, plan.main):
             print(line)
+    for branch, count, base in plan.unpushed:
+        if count is None:
+            print(f"unpushed: cannot compare {branch} with {base}")
+        else:
+            commits = "commit" if count == 1 else "commits"
+            print(f"unpushed: {branch} has {count} {commits} not on {base}")
     for key in plan.stale_config:
         print(f"stale: {key} names an old path and is left in place")
     for warning in plan.warnings:
@@ -1381,6 +1502,58 @@ def _apply_bare_at_root(plan, git):
         raise GitProjectError(message) from exception
 
 
+def _kill_post_hook(process):
+    """Stop the hook's process group: SIGTERM, a grace period, then SIGKILL."""
+    deadline = time.monotonic() + _POST_KILL_GRACE
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=_POST_KILL_GRACE)
+        # The leader is gone, but the rest of the group gets the same grace.
+        while time.monotonic() < deadline:
+            os.killpg(process.pid, 0)
+            time.sleep(0.05)
+    # A second Ctrl-C cuts the grace short. It must not skip the SIGKILL.
+    except (ProcessLookupError, subprocess.TimeoutExpired, KeyboardInterrupt):
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait()
+
+
+def _run_post_hook(plan):
+    """Run the post-migration command in <top>. Return None on success, and
+    otherwise what went wrong.
+
+    """
+    try:
+        # No stdin, so a hook that prompts fails rather than waits for the
+        # timeout. Its own session, so a kill reaches its children too.
+        process = subprocess.Popen(
+            plan.post_hook,
+            cwd=plan.top,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exception:
+        return f"could not start: {exception.strerror}"
+    try:
+        returncode = process.wait(timeout=plan.post_timeout)
+    except subprocess.TimeoutExpired:
+        _kill_post_hook(process)
+        return f"timed out after {plan.post_timeout} seconds"
+    except KeyboardInterrupt:
+        # The terminal's Ctrl-C does not reach the hook's session.
+        _kill_post_hook(process)
+        return "was interrupted"
+    if returncode < 0:
+        return f"was killed by signal {-returncode}"
+    if returncode != 0:
+        return f"failed with status {returncode}"
+    return None
+
+
 def command_worktree_migrate(git, gitproject, project, clargs):
     """Implement git-project worktree migrate."""
     plan = _plan_migration(git, project)
@@ -1402,12 +1575,32 @@ def command_worktree_migrate(git, gitproject, project, clargs):
 
     if plan.bare_at_root:
         _apply_bare_at_root(plan, git)
-        print(f"Migrated {plan.top}. The manifest is in {plan.store_new}.")
-        return 0
-    if plan.main is None:
+    elif plan.main is None:
         raise GitProjectError("worktree migrate found no main worktree")
-    _apply(plan, plan.main, git, project)
-    print(f"Migrated {plan.top}. The manifest is in {plan.store_new}.")
+    else:
+        _apply(plan, plan.main, git, project)
+    # Flush, so the hook's output follows this line.
+    print(
+        f"Migrated {plan.top}. The manifest is in {plan.store_new}.",
+        flush=True,
+    )
+    if plan.post_hook:
+        error = _run_post_hook(plan)
+        manifest_path = plan.store_new / _MIGRATE_MANIFEST
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            if not isinstance(manifest, dict):
+                raise ValueError("the manifest is not an object")
+            manifest["post"] = {"status": error or "ok"}
+            _write_manifest(manifest_path, manifest)
+        except (OSError, ValueError):
+            print(f"warn: cannot record the hook result in {manifest_path}")
+        if error is not None:
+            raise GitProjectError(
+                f"worktree migrate is complete, but the command in "
+                f"{plan.post_key} {error}. The migration stays. Run the "
+                f"command again by hand in {plan.top}."
+            )
     return 0
 
 
@@ -1581,10 +1774,34 @@ class WorktreePlugin(Plugin):
     <top> and in each directory between <top> and a worktree, and refuses
     an entry there that holds no worktree, unless its name starts with
     ``.``. An index or such an entry can mean a checkout that ``core.bare``
-    hides. It refuses a
-    ``commondir`` that names another repository. A ``core.bare`` in the
-    store's ``config.worktree`` is allowed, since ``git sparse-checkout``
-    puts it there.
+    hides. It refuses a ``commondir`` that names another repository. A
+    ``core.bare`` in the store's ``config.worktree`` is allowed, since
+    ``git sparse-checkout`` puts it there.
+
+    For a flat clone or a bare store, the plan lists each local branch
+    with commits its upstream lacks, and how many. A commit the upstream
+    has under another id, as after a rebase or cherry-pick, does not count.
+    A branch with no upstream, or an upstream that is gone, is compared
+    with the main branch. A bare store with no main branch lists only
+    branches with an upstream. The list is for information and does not
+    stop the migration.
+
+    After a successful ``--apply`` of either kind, migrate runs the
+    command in ``<project>.postmigrate``, if it is set, in <top>. The value
+    is split into words as a shell would split it, but no shell runs it, so
+    pipes, redirections and variables do not work. The command runs in its
+    own session and gets no standard input. It has the number of seconds in
+    ``<project>.postmigratetimeout`` to finish, 600 when that is unset. On
+    a timeout or a Ctrl-C, migrate sends SIGTERM to the command's process
+    group, then SIGKILL after five seconds. A process that starts its own
+    session or process group is not stopped. Only a Ctrl-C or the timeout
+    stops the command. A hangup or a SIGTERM to migrate does not reach it.
+    The result goes in ``post.status`` in the manifest, ``ok`` or the
+    reason it failed. When the command fails or is interrupted, the
+    migration stays done and migrate exits with a failure status. The dry
+    run shows the step and the config file that sets the command, but does
+    not run it. Migrate refuses a command it cannot split, an empty one,
+    and a timeout that is not a whole number from 1 to 86400.
 
     ``--apply`` writes the plan to ``git-project-migrate.json`` in the git
     directory. Before each step runs, its name goes in ``current_step``.

@@ -25,8 +25,11 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
+import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1427,6 +1430,493 @@ def test_worktree_migrate_existing_worktree_config(flat_clone, script_runner):
     )
 
 
+def _unpushed(result):
+    return [
+        line
+        for line in result.stdout.splitlines()
+        if line.startswith("unpushed:")
+    ]
+
+
+def test_worktree_migrate_lists_unpushed(flat_clone, script_runner):
+    fc = flat_clone
+    top = str(fc.top)
+    commit = ("-c", "user.name=Test", "-c", "user.email=test@example.com")
+    _out(
+        "-C", str(fc.topic), "branch", "-q", "--set-upstream-to=origin/pushed"
+    )
+    for n in range(2):
+        _out(
+            "-C",
+            str(fc.topic),
+            *commit,
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            f"topic {n}",
+        )
+    # The same change as user/feature under another id, so git cherry marks
+    # it "-" and the branch has nothing unpushed.
+    repo = pygit2.Repository(top)
+    feature = repo.revparse_single("refs/heads/user/feature")
+    signature = pygit2.Signature("Other", "other@example.com")
+    repo.create_commit(
+        "refs/heads/picked",
+        signature,
+        signature,
+        "Picked",
+        feature.tree_id,
+        [feature.parent_ids[0]],
+    )
+    _out("-C", top, "branch", "-q", "--set-upstream-to=user/feature", "picked")
+    # A tag of the same name must not turn the branch into heads/topic.
+    _out("-C", top, "tag", "topic", "master")
+    before = _snapshot(fc)
+
+    result = _migrate(script_runner, fc.top)
+
+    assert result.success, result.stdout + result.stderr
+    assert _snapshot(fc) == before
+    # Without an upstream, a branch is compared with master.
+    assert _unpushed(result) == [
+        "unpushed: local-only has 1 commit not on master",
+        "unpushed: topic has 2 commits not on origin/pushed",
+        "unpushed: user/feature has 1 commit not on master",
+    ]
+
+
+def test_worktree_migrate_unpushed_gone_upstream(flat_clone, script_runner):
+    fc = flat_clone
+    top = str(fc.top)
+    _out("-C", top, "config", "branch.local-only.remote", "origin")
+    _out("-C", top, "config", "branch.local-only.merge", "refs/heads/gone")
+
+    result = _migrate(script_runner, fc.top)
+
+    assert result.success, result.stdout + result.stderr
+    assert "unpushed: local-only has 1 commit not on master" in (
+        _unpushed(result)
+    )
+
+
+def test_worktree_migrate_unpushed_cannot_compare(
+    flat_clone, script_runner, monkeypatch
+):
+    from git_project_core_plugins import worktree as worktree_module
+
+    fc = flat_clone
+    real = worktree_module._git_or_none
+
+    def failing_cherry(*args):
+        if "cherry" in args:
+            return None
+        return real(*args)
+
+    monkeypatch.setattr(worktree_module, "_git_or_none", failing_cherry)
+
+    result = _migrate(script_runner, fc.top)
+
+    assert result.success, result.stdout + result.stderr
+    assert _unpushed(result) == [
+        "unpushed: cannot compare local-only with master",
+        "unpushed: cannot compare master with origin/master",
+        "unpushed: cannot compare topic with master",
+        "unpushed: cannot compare user/feature with master",
+    ]
+
+
+def test_worktree_migrate_no_main_branch_refuses_first(
+    flat_clone, script_runner
+):
+    fc = flat_clone
+    _drop_main_branch(fc.top, fc.top / ".git")
+    _out("-C", str(fc.top), "config", "project.postmigrate", "'unbalanced")
+
+    result = _migrate(script_runner, fc.top)
+
+    assert not result.success
+    assert "refuse: cannot determine the main branch" in result.stdout
+    # The refusal stops the plan before the hook and the unpushed list.
+    assert "postmigrate" not in result.stdout
+    assert _unpushed(result) == []
+
+
+def _post_script(base):
+    """Write a script that records its directory and arguments."""
+    script = base / "post.py"
+    script.write_text(
+        "import json, os, sys\n"
+        "with open(sys.argv[1], 'w') as file:\n"
+        "    json.dump([os.getcwd(), sys.argv[2:]], file)\n"
+    )
+    return script
+
+
+def test_worktree_migrate_post_hook(flat_clone, script_runner):
+    fc = flat_clone
+    record = fc.base / "post.json"
+    command = [sys.executable, str(_post_script(fc.base)), str(record)]
+    hook = shlex.join([*command, "one", "two words"])
+    _out("-C", str(fc.top), "config", "project.postmigrate", hook)
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert result.success, result.stdout + result.stderr
+    assert json.loads(record.read_text()) == [
+        str(fc.top),
+        ["one", "two words"],
+    ]
+    manifest = json.loads((fc.store / "git-project-migrate.json").read_text())
+    assert manifest["post"] == {"status": "ok"}
+
+
+def test_worktree_migrate_dry_run_skips_post_hook(flat_clone, script_runner):
+    fc = flat_clone
+    record = fc.base / "post.json"
+    hook = shlex.join(
+        [sys.executable, str(_post_script(fc.base)), str(record)]
+    )
+    _out("-C", str(fc.top), "config", "project.postmigrate", hook)
+
+    result = _migrate(script_runner, fc.top)
+
+    assert result.success, result.stdout + result.stderr
+    origin = f"file:{fc.top / '.git' / 'config'}"
+    assert (
+        f"run the command in project.postmigrate from {origin}, in {fc.top}"
+        in result.stdout
+    )
+    assert hook not in result.stdout
+    assert not record.exists()
+
+
+@pytest.mark.parametrize(
+    "command, error",
+    [
+        (
+            [sys.executable, "-c", "import sys; sys.exit(3)"],
+            "failed with status 3",
+        ),
+        (["/nonexistent/post-hook"], "could not start"),
+        (
+            [sys.executable, "-c", "import os; os.kill(os.getpid(), 9)"],
+            "was killed by signal 9",
+        ),
+    ],
+    ids=["status", "missing", "signal"],
+)
+def test_worktree_migrate_post_hook_fails(
+    flat_clone, script_runner, command, error
+):
+    fc = flat_clone
+    _out(
+        "-C",
+        str(fc.top),
+        "config",
+        "project.postmigrate",
+        shlex.join(command),
+    )
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert not result.success
+    output = result.stdout + result.stderr
+    message = f"the command in project.postmigrate {error}"
+    assert message in output
+    assert output.index(f"Migrated {fc.top}.") < output.index(message)
+    assert shlex.join(command) not in output
+    # The migration stands.
+    check_container_gitdir(fc.top, fc.store.name)
+    manifest = json.loads((fc.store / "git-project-migrate.json").read_text())
+    assert manifest["complete"] is True
+    assert manifest["post"]["status"].startswith(error)
+
+
+def _spawning_hook(base, ignore_term=False, child_cleans=False):
+    """Return a hook that starts a child and then sleeps.
+
+    The child writes "grandchild" after 3 seconds, so the file shows whether
+    it outlived a kill. The hook writes "spawned" once the child exists.
+    With ignore_term, both ignore SIGTERM. With child_cleans, the child
+    writes "cleaned" half a second after a SIGTERM, then exits.
+
+    """
+    files = SimpleNamespace(
+        marker=base / "grandchild",
+        spawned=base / "spawned",
+        cleaned=base / "cleaned",
+    )
+    child = base / "child.py"
+    child.write_text(
+        "import signal, sys, time\n"
+        "def term(*args):\n"
+        "    time.sleep(0.5)\n"
+        f"    open({str(files.cleaned)!r}, 'w').close()\n"
+        "    sys.exit(0)\n"
+        + ("signal.signal(signal.SIGTERM, term)\n" if child_cleans else "")
+        + "time.sleep(3)\n"
+        f"open({str(files.marker)!r}, 'w').close()\n"
+    )
+    script = base / "spawn.py"
+    script.write_text(
+        "import signal, subprocess, sys, time\n"
+        + (
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            if ignore_term
+            else ""
+        )
+        + f"subprocess.Popen([sys.executable, {str(child)!r}])\n"
+        f"open({str(files.spawned)!r}, 'w').close()\n"
+        "time.sleep(30)\n"
+    )
+    files.command = [sys.executable, str(script)]
+    return files
+
+
+def _wait_for(path):
+    for _ in range(100):
+        if path.exists():
+            return
+        time.sleep(0.1)
+
+
+def _wait_out_grandchild():
+    # Longer than the child's delay, so a survivor has written its file.
+    time.sleep(4)
+
+
+def _set_hook(fc, command, timeout=None):
+    top = str(fc.top)
+    _out("-C", top, "config", "project.postmigrate", shlex.join(command))
+    if timeout is not None:
+        _out("-C", top, "config", "project.postmigratetimeout", timeout)
+
+
+def _post_status(fc):
+    manifest = json.loads((fc.store / "git-project-migrate.json").read_text())
+    assert manifest["complete"] is True
+    return manifest["post"]["status"]
+
+
+def test_worktree_migrate_post_hook_timeout(flat_clone, script_runner):
+    fc = flat_clone
+    hook = _spawning_hook(fc.base)
+    _set_hook(fc, hook.command, timeout="1")
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert not result.success
+    reason = "timed out after 1 seconds"
+    assert f"the command in project.postmigrate {reason}" in (
+        result.stdout + result.stderr
+    )
+    assert _post_status(fc) == reason
+    assert hook.spawned.exists()
+    _wait_out_grandchild()
+    assert not hook.marker.exists()
+
+
+def test_worktree_migrate_post_hook_ignores_sigterm(
+    flat_clone, script_runner, monkeypatch
+):
+    from git_project_core_plugins import worktree as worktree_module
+
+    fc = flat_clone
+    monkeypatch.setattr(worktree_module, "_POST_KILL_GRACE", 0.5)
+    hook = _spawning_hook(fc.base, ignore_term=True)
+    _set_hook(fc, hook.command, timeout="1")
+
+    began = time.monotonic()
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    # Only SIGKILL stops the hook before its 30 second sleep ends.
+    assert time.monotonic() - began < 15
+    assert not result.success
+    assert "the command in project.postmigrate timed out after 1 seconds" in (
+        result.stdout + result.stderr
+    )
+    assert hook.spawned.exists()
+    _wait_out_grandchild()
+    assert not hook.marker.exists()
+
+
+def test_worktree_migrate_post_hook_group_gets_grace(
+    flat_clone, script_runner
+):
+    fc = flat_clone
+    hook = _spawning_hook(fc.base, child_cleans=True)
+    _set_hook(fc, hook.command, timeout="1")
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert not result.success
+    assert hook.spawned.exists()
+    # The hook dies on SIGTERM at once. Its child still gets time to clean
+    # up before the SIGKILL.
+    assert hook.cleaned.exists()
+    assert not hook.marker.exists()
+
+
+def _interrupting_popen(module, command, spawned, in_grace=False):
+    """Return a Popen whose wait for the hook raises KeyboardInterrupt once
+    the hook's child exists, standing in for a Ctrl-C. With in_grace, the
+    wait in the SIGTERM grace raises too.
+
+    """
+
+    class InterruptedPopen(subprocess.Popen):
+        interrupted = False
+
+        def wait(self, timeout=None):
+            if self.args == command:
+                if not InterruptedPopen.interrupted:
+                    InterruptedPopen.interrupted = True
+                    _wait_for(spawned)
+                    raise KeyboardInterrupt
+                if in_grace and timeout == module._POST_KILL_GRACE:
+                    raise KeyboardInterrupt
+            return super().wait(timeout)
+
+    return InterruptedPopen
+
+
+@pytest.mark.parametrize("in_grace", [False, True], ids=["once", "twice"])
+def test_worktree_migrate_post_hook_interrupted(
+    flat_clone, script_runner, monkeypatch, in_grace
+):
+    from git_project_core_plugins import worktree as worktree_module
+
+    fc = flat_clone
+    # Ignoring SIGTERM, so a second Ctrl-C leaves only the SIGKILL to stop
+    # it.
+    hook = _spawning_hook(fc.base, ignore_term=in_grace)
+    _set_hook(fc, hook.command)
+    monkeypatch.setattr(
+        worktree_module.subprocess,
+        "Popen",
+        _interrupting_popen(
+            worktree_module, hook.command, hook.spawned, in_grace
+        ),
+    )
+
+    began = time.monotonic()
+    try:
+        result = _migrate(script_runner, fc.top, "--apply")
+    except KeyboardInterrupt:
+        # Fail the test, not the whole session.
+        pytest.fail("a Ctrl-C escaped migrate")
+
+    assert time.monotonic() - began < 15
+    assert not result.success
+    assert "the command in project.postmigrate was interrupted" in (
+        result.stdout + result.stderr
+    )
+    assert _post_status(fc) == "was interrupted"
+    assert hook.spawned.exists()
+    _wait_out_grandchild()
+    assert not hook.marker.exists()
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["0", "-1", "1.5", "soon", "", "86401", "1" + "0" * 400],
+    ids=["zero", "negative", "fraction", "word", "empty", "day+1", "huge"],
+)
+def test_worktree_migrate_refuses_bad_post_timeout(
+    flat_clone, script_runner, value
+):
+    fc = flat_clone
+    _out("-C", str(fc.top), "config", "project.postmigratetimeout", value)
+    before = _snapshot(fc)
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert not result.success
+    assert (
+        "refuse: project.postmigratetimeout is not a whole number of seconds "
+        "from 1 to 86400" in result.stdout
+    )
+    assert _snapshot(fc) == before
+
+
+def test_worktree_migrate_post_hook_largest_timeout(flat_clone, script_runner):
+    fc = flat_clone
+    _set_hook(fc, [sys.executable, "-c", "pass"], timeout="86400")
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert result.success, result.stdout + result.stderr
+    assert _post_status(fc) == "ok"
+
+
+def test_worktree_migrate_post_hook_bad_manifest(
+    flat_clone, script_runner, monkeypatch
+):
+    from git_project_core_plugins import worktree as worktree_module
+
+    fc = flat_clone
+    _set_hook(fc, [sys.executable, "-c", "pass"])
+    manifest_path = fc.store / "git-project-migrate.json"
+    run_hook = worktree_module._run_post_hook
+
+    # Something rewrote the manifest as a list while the hook ran.
+    def replace_manifest(plan):
+        manifest_path.write_text("[]\n")
+        return run_hook(plan)
+
+    monkeypatch.setattr(worktree_module, "_run_post_hook", replace_manifest)
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert result.success, result.stdout + result.stderr
+    assert f"warn: cannot record the hook result in {manifest_path}" in (
+        result.stdout
+    )
+
+
+def test_worktree_migrate_post_hook_without_origin(
+    flat_clone, script_runner, monkeypatch
+):
+    from git_project_core_plugins import worktree as worktree_module
+
+    fc = flat_clone
+    _set_hook(fc, [sys.executable, "-c", "pass"])
+    real = worktree_module._git_or_none
+
+    def no_origin(*args):
+        if "--show-origin" in args:
+            return None
+        return real(*args)
+
+    monkeypatch.setattr(worktree_module, "_git_or_none", no_origin)
+
+    result = _migrate(script_runner, fc.top)
+
+    assert result.success, result.stdout + result.stderr
+    assert (
+        f"run the command in project.postmigrate, in {fc.top}" in result.stdout
+    )
+
+
+@pytest.mark.parametrize(
+    "value, reason",
+    [("'unbalanced", "is not a valid command"), ("", "is empty")],
+)
+def test_worktree_migrate_refuses_bad_post_hook(
+    flat_clone, script_runner, value, reason
+):
+    fc = flat_clone
+    _out("-C", str(fc.top), "config", "project.postmigrate", value)
+    before = _snapshot(fc)
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert not result.success
+    assert f"refuse: project.postmigrate {reason}" in result.stdout
+    assert _snapshot(fc) == before
+
+
 def _rollback(manifest):
     """Follow the manual rollback in the worktree help."""
     done = set(manifest["steps_done"])
@@ -1753,6 +2243,87 @@ def test_worktree_migrate_bare_at_root_dry_run(
     # Already relative, so left alone.
     assert "worktrees/master/commondir" not in result.stdout
     assert "Dry run, the migration changed nothing." in result.stdout
+
+
+def test_worktree_migrate_bare_at_root_dry_run_unpushed_and_hook(
+    bare_at_root_clone, script_runner
+):
+    fc = bare_at_root_clone
+    record = fc.base / "post.json"
+    hook = shlex.join(
+        [sys.executable, str(_post_script(fc.base)), str(record)]
+    )
+    _out("-C", str(fc.top), "config", "project.postmigrate", hook)
+
+    result = _migrate(script_runner, fc.top)
+
+    assert result.success, result.stdout + result.stderr
+    assert "unpushed: topic has 1 commit not on master" in _unpushed(result)
+    origin = f"file:{fc.top / '.git' / 'config'}"
+    assert (
+        f"run the command in project.postmigrate from {origin}, in {fc.top}"
+        in result.stdout
+    )
+    assert hook not in result.stdout
+    assert not record.exists()
+
+
+def test_worktree_migrate_bare_at_root_post_hook(
+    bare_at_root_clone, script_runner
+):
+    fc = bare_at_root_clone
+    record = fc.base / "post.json"
+    command = [sys.executable, str(_post_script(fc.base)), str(record), "x"]
+    _out(
+        "-C", str(fc.top), "config", "project.postmigrate", shlex.join(command)
+    )
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert result.success, result.stdout + result.stderr
+    assert json.loads(record.read_text()) == [str(fc.top), ["x"]]
+    manifest = json.loads((fc.store / "git-project-migrate.json").read_text())
+    assert manifest["form"] == "bare_at_root"
+    assert manifest["complete"] is True
+    assert manifest["post"] == {"status": "ok"}
+
+
+def _drop_main_branch(top, gitdir):
+    """Rename master and unset project.branch, so no main branch exists
+    among two or more branches.
+
+    """
+    _out("-C", str(top), "branch", "-m", "master", "trunk")
+    _out("--git-dir", str(gitdir), "config", "--unset-all", "project.branch")
+
+
+def test_worktree_migrate_bare_at_root_no_main_branch(
+    bare_at_root_clone, script_runner
+):
+    fc = bare_at_root_clone
+    gitdir = fc.top / ".git"
+    _drop_main_branch(fc.master, gitdir)
+    _out("-C", str(fc.topic), "branch", "-q", "--set-upstream-to=pushed")
+    _out(
+        "-C",
+        str(fc.topic),
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "topic",
+    )
+
+    result = _migrate(script_runner, fc.top)
+
+    assert result.success, result.stdout + result.stderr
+    # Branches with no upstream have no main branch to compare with.
+    assert _unpushed(result) == ["unpushed: topic has 1 commit not on pushed"]
+    assert f"rename {gitdir} -> {fc.store}" in result.stdout
 
 
 @pytest.mark.parametrize("cwd", ["", "topic"])

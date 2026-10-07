@@ -40,6 +40,13 @@ Added
   directory on the way to a worktree that holds no worktree is refused,
   unless its name starts with ``.``. Sparse checkouts and skip-worktree
   files are allowed in this form.
+- ``worktree migrate`` lists each local branch with commits that its
+  upstream lacks. A branch with no upstream, or one that is gone, is
+  compared with the main branch.
+- ``worktree migrate --apply`` runs the command in
+  ``<project>.postmigrate`` in the top-level directory after a successful
+  migration. ``<project>.postmigratetimeout`` sets its time limit in
+  seconds, 600 by default and 86400 at most. The manifest records the result.
 
 Changed
 .......
