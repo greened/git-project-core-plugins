@@ -35,6 +35,15 @@ Changed
 - The docs, help text and error messages call the worktree layout the
   umbrella layout, and its top-level directory the umbrella.
 
+Fixed
+.....
+- In the umbrella layout, ``worktree add`` with a relative path that does
+  not start with ``..``, run inside a worktree, put the new worktree inside
+  that one. It now goes in the umbrella.
+- Run from the umbrella with no committish, ``worktree add`` could branch
+  from the store's detached HEAD, which can fall behind. It now starts at
+  the project branch.
+
 `0.0.31`_ - 2026-10-07
 ----------------------
 Changed

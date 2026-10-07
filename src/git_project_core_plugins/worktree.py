@@ -48,9 +48,10 @@ from git_project_core_plugins.common import add_plugin_version_argument
 
 
 def normalize_path(git, path):
-    """Find an appropriate repository-relative path. A relative path that does
-    not start with '..' is placed under the current directory in a bare
-    repository, and under the root of the current working copy otherwise. A
+    """Find an appropriate repository-relative path. In the umbrella layout, a
+    relative path that does not start with '..' is placed in the umbrella.
+    Otherwise it is placed under the current directory in a bare
+    repository, and under the root of the current working copy in any other. A
     path that starts with '..' is resolved from the current directory.
 
     path: A string path
@@ -59,9 +60,13 @@ def normalize_path(git, path):
     path = Path(path).expanduser()
 
     if not path.is_absolute() and path.parts[0] != "..":
+        umbrella = get_umbrella_dir(git)
+        if umbrella is not None:
+            # Worktrees go beside each other, never inside one.
+            path = umbrella / path
         # In a bare repository, put it under the current directory.
         # Otherwise put it under the root of the current working copy.
-        if git.is_bare_repository():
+        elif git.is_bare_repository():
             path = Path.cwd() / path
         else:
             path = Path(git.get_working_copy_root()) / path
@@ -100,15 +105,35 @@ def get_hidden_gitdir_name(url: str):
 # Go walks past a ".git" file, while git and pygit2 honour it.
 def write_umbrella_gitdir(umbrella: Path, gitdir_name: str):
     # Keep the pointer relative so the umbrella still moves.
-    (umbrella / ".git").write_text(f"gitdir: {gitdir_name}\n")
+    (umbrella / ".git").write_text(_umbrella_gitdir_text(gitdir_name))
+
+
+def _umbrella_gitdir_text(gitdir_name):
+    return f"gitdir: {gitdir_name}\n"
+
+
+def get_umbrella_dir(git):
+    """Return the umbrella, which holds the store and its worktrees, or None
+    outside the umbrella layout. The umbrella is known by the .git file that write_umbrella_gitdir leaves beside the store.
+
+    """
+    store = Path(git.get_git_common_dir()).resolve()
+    gitfile = store.parent / ".git"
+    if gitfile.is_file() and gitfile.read_text() == _umbrella_gitdir_text(
+        store.name
+    ):
+        return store.parent
+    return None
 
 
 # Determine a path and committish from args.
-def get_name_branch_path_and_refname(git, gp, clargs):
+def get_name_branch_path_and_refname(git, project, clargs):
     """Given a Project and worktree command-line arguments <name-or-path> and
     <committish>, determine an appropriate worktree name, a branch for the
     worktree, a path based on the name and refname based on the name. The
-    path is required. With no <committish>, the refname is HEAD's.
+    path is required. With no <committish>, the refname is HEAD's. When
+    run from the umbrella, the refname is the project branch's, if there is
+    one.
 
     """
     if not getattr(clargs, "path", None):
@@ -137,6 +162,14 @@ def get_name_branch_path_and_refname(git, gp, clargs):
         # committish itself and let create_branch branch at that commit.
         ref = git.committish_to_ref(clargs.committish)
         refname = ref.name if ref is not None else clargs.committish
+    elif git.is_bare_repository() and get_umbrella_dir(git) is not None:
+        # The store's HEAD can stay detached where the layout was made,
+        # behind the project branch.
+        main = _find_main_branch(
+            git, project.get_section(), ["--git-dir", git.get_git_common_dir()]
+        )
+        if main is not None:
+            refname = git.branch_name_to_refname(main)
 
     return name, branch, path, refname
 
@@ -145,7 +178,7 @@ def get_name_branch_path_and_refname(git, gp, clargs):
 def command_worktree_add(git, gitproject, project, clargs):
     """Implement git-project worktree add."""
     name, newbranch, path, refname = get_name_branch_path_and_refname(
-        git, gitproject, clargs
+        git, project, clargs
     )
 
     branch = git.refname_to_branch_name(refname)
@@ -1619,16 +1652,19 @@ class WorktreePlugin(Plugin):
     The branch is named after <name-or-path>: a simple name gives a branch of
     that name, and a relative path such as ``../user/topic`` gives
     ``user/topic``, the part after any ``..``. That branch is created at
-    <committish>, or at HEAD, when it does not exist yet. An existing branch is
-    checked out as it is, and <committish> is then ignored. With -b <branch>,
-    the new branch <branch> is created at <committish> or HEAD and checked out
-    instead.
+    <committish>, or at HEAD (the project branch, if there is one, when run
+    outside any worktree in the umbrella layout), when it does not exist yet.
+    An existing branch is checked out as it is, and <committish> is then
+    ignored. With -b <branch>, the new branch <branch> is created at
+    <committish> or that same default and checked out instead.
 
     A relative path that does not start with ``..`` is placed under the root of
     the current worktree, or under the current directory in a bare repository.
-    A path that starts with ``..`` is taken from the current directory. So
-    ``worktree add ../topic``, run in the main worktree, puts the new worktree
-    beside it, and ``worktree add topic`` puts it inside.
+    In the umbrella layout, such a path is placed in the umbrella, wherever
+    the command runs. A path that starts with ``..`` is taken from the current
+    directory. So ``worktree add ../topic``, run in the main worktree of a
+    plain clone, puts the new worktree beside it, and ``worktree add topic``
+    puts it inside.
 
     To keep things simple, we'll usually always name worktrees similarly (or
     identically) to the branches they reference, though it is not strictly
@@ -1930,7 +1966,11 @@ class WorktreePlugin(Plugin):
             "add",
             "worktree-add",
             help="Create a worktree",
-            epilog="The path is required. The committish defaults to HEAD.",
+            epilog=(
+                "The path is required. The committish defaults to HEAD, or, "
+                "outside any worktree in the umbrella layout, to the project "
+                "branch if there is one."
+            ),
         )
 
         worktree_add_parser.set_defaults(func=command_worktree_add)

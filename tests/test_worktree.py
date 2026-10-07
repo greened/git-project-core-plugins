@@ -37,9 +37,10 @@ import common
 import git_project
 import pygit2
 import pytest
+from git_project.test_support.common import create_commit
 
 from git_project_core_plugins import Worktree, WorktreePlugin
-from git_project_core_plugins.worktree import _status_paths
+from git_project_core_plugins.worktree import _status_paths, get_umbrella_dir
 
 
 def test_worktree_add_arguments(
@@ -527,6 +528,113 @@ def test_worktree_add_subdir(git, git_project_runner, tmp_path_factory):
     os.chdir(workarea.parent / "user" / "test2")
     git = git_project.Git()  # Reinitialize in new workarea.
     assert git.get_current_branch() == "user/test2"
+
+
+def _umbrella(runner, remote_repository):
+    runner.run(".*", "", "clone", "--worktree", remote_repository.path)
+    top = Path.cwd().resolve()
+    return SimpleNamespace(
+        top=top,
+        store=top / f".{Path(remote_repository.path).name}.git",
+        master=top / "master",
+    )
+
+
+@pytest.mark.parametrize("cwd", ["", "master"])
+def test_worktree_add_umbrella_relative_path(
+    git_project_runner, remote_repository, cwd
+):
+    u = _umbrella(git_project_runner, remote_repository)
+    git_project_runner.chdir(u.top / cwd)
+
+    git_project_runner.run(".*", "", "worktree", "add", "topic")
+
+    assert (u.top / "topic").is_dir()
+    assert not (u.master / "topic").exists()
+
+
+def test_worktree_add_umbrella_starts_at_project_branch(
+    git_project_runner, remote_repository
+):
+    u = _umbrella(git_project_runner, remote_repository)
+    repo = pygit2.Repository(str(u.store))
+    assert repo.head_is_detached
+    old = repo.head.target
+    new = create_commit(repo, "refs/heads/master", [old], "Newer")
+
+    git_project_runner.run(".*", "", "worktree", "add", "topic")
+
+    assert repo.references["refs/heads/topic"].target == new
+
+
+def test_worktree_add_umbrella_starts_at_configured_branch(
+    git_project_runner, remote_repository
+):
+    # A project branch other than master, so the default branch fallback
+    # cannot pass this test.
+    u = _umbrella(git_project_runner, remote_repository)
+    repo = pygit2.Repository(str(u.store))
+    pushed = repo.references["refs/remotes/origin/pushed"].target
+    assert pushed != repo.references["refs/heads/master"].target
+    store = str(u.store)
+    _out("--git-dir", store, "branch", "pushed", "origin/pushed")
+    _out(
+        "--git-dir",
+        store,
+        "config",
+        "--replace-all",
+        "project.branch",
+        "pushed",
+    )
+
+    git_project_runner.run(".*", "", "worktree", "add", "topic")
+
+    assert repo.references["refs/heads/topic"].target == pushed
+
+
+def test_worktree_add_umbrella_absolute_path(
+    git_project_runner, remote_repository, tmp_path_factory
+):
+    u = _umbrella(git_project_runner, remote_repository)
+    target = tmp_path_factory.mktemp("elsewhere").resolve() / "topic"
+    git_project_runner.chdir(u.master)
+
+    git_project_runner.run(".*", "", "worktree", "add", str(target))
+
+    assert target.is_dir()
+    assert not (u.top / "topic").exists()
+    assert not (u.master / "topic").exists()
+
+
+def test_worktree_add_umbrella_committish_wins(
+    git_project_runner, remote_repository
+):
+    u = _umbrella(git_project_runner, remote_repository)
+    repo = pygit2.Repository(str(u.store))
+    pushed = repo.references["refs/remotes/origin/pushed"].target
+    assert pushed != repo.references["refs/heads/master"].target
+
+    git_project_runner.run(
+        ".*", "", "worktree", "add", "topic", "origin/pushed"
+    )
+
+    assert repo.references["refs/heads/topic"].target == pushed
+
+
+@pytest.mark.parametrize("cwd", ["", "master"])
+def test_get_umbrella_dir(git_project_runner, remote_repository, cwd):
+    u = _umbrella(git_project_runner, remote_repository)
+    os.chdir(u.top / cwd)
+
+    assert get_umbrella_dir(git_project.Git()) == u.top
+
+
+def test_get_umbrella_dir_outside_layout(git):
+    assert get_umbrella_dir(git) is None
+
+
+def test_get_umbrella_dir_bare_outside_layout(bare_git):
+    assert get_umbrella_dir(bare_git) is None
 
 
 def test_worktree_rm(git, git_project_runner, tmp_path_factory):
