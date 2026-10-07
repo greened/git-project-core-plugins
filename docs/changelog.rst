@@ -30,6 +30,9 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+
+`0.0.30`_ - 2026-10-07
+----------------------
 Added
 .....
 - ``worktree migrate`` converts a store already bare at ``<top>/.git``
@@ -200,7 +203,8 @@ Fixed
   404. Issues named ``unknown/greened``, a leftover from hatch's project
   template, and Documentation misspelled the package name.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.29...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.30...HEAD
+.. _0.0.30: https://github.com/greened/git-project-core-plugins/compare/v0.0.29...v0.0.30
 .. _0.0.29: https://github.com/greened/git-project-core-plugins/compare/v0.0.28...v0.0.29
 .. _0.0.28: https://github.com/greened/git-project-core-plugins/compare/v0.0.27...v0.0.28
 .. _0.0.27: https://github.com/greened/git-project-core-plugins/compare/v0.0.26...v0.0.27
