@@ -56,7 +56,7 @@ class InitPlugin(Plugin):
     when they are not set already.
 
     Plugins add options to init. For example the worktree command adds a
-    --worktree option to convert an existing local clone to a ``worktree
+    --worktree option to convert an existing local clone to an ``umbrella
     layout``.
 
     See also::

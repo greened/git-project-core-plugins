@@ -54,7 +54,7 @@ def _protected_paths(git):
     """Return the resolved paths that an artifact removal must not remove or
     contain: the root, the home directory and, inside a repository, the
     working copy and the git common dir. Protecting the common dir also
-    protects a worktree container, which holds it.
+    protects an umbrella, which holds it.
 
     """
     protected = [Path("/"), Path.home()]

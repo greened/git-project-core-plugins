@@ -91,16 +91,16 @@ def get_hidden_gitdir_name(url: str):
     return "." + urlname
 
 
-# Without this the container is not a repository, so anything
+# Without this the umbrella is not a repository, so anything
 # that stands there and asks git a question gets nothing. It
 # has to be a file. A symlink or a directory named ".git"
 # brings back the go problem the hidden name avoids, because
 # go's VCS search follows a ".git" that resolves to a
 # directory and then runs "git status" against a bare clone.
 # Go walks past a ".git" file, while git and pygit2 honour it.
-def write_container_gitdir(container: Path, gitdir_name: str):
-    # Keep the pointer relative so the container still moves.
-    (container / ".git").write_text(f"gitdir: {gitdir_name}\n")
+def write_umbrella_gitdir(umbrella: Path, gitdir_name: str):
+    # Keep the pointer relative so the umbrella still moves.
+    (umbrella / ".git").write_text(f"gitdir: {gitdir_name}\n")
 
 
 # Determine a path and committish from args.
@@ -1340,7 +1340,7 @@ def _apply(plan, main, git, project):
 
         step = "write_pointer"
         start(step)
-        write_container_gitdir(top, store_new.name)
+        write_umbrella_gitdir(top, store_new.name)
         done(step)
 
         # repair finds each admin dir by the name in the worktree's .git
@@ -1470,7 +1470,7 @@ def _apply_bare_at_root(plan, git):
 
         step = "write_pointer"
         start(step)
-        write_container_gitdir(plan.top, store_new.name)
+        write_umbrella_gitdir(plan.top, store_new.name)
         done(step)
 
         step = "repair"
@@ -1692,10 +1692,10 @@ class WorktreePlugin(Plugin):
     https://pypi.org/project/git-project/
 
     The worktree plugin also adds a --worktree option to the clone and init
-    commands.  Both set up the ``worktree layout`` described in the package
+    commands.  Both set up the ``umbrella layout`` described in the package
     documentation.  The bare repository is a hidden child directory named for
     the last component of the remote url, such as ``.myrepo.git``.  The
-    top-level directory holds it alongside the worktrees.
+    umbrella holds it alongside the worktrees.
 
     ``clone --worktree`` clones bare, then rewrites the fetch refspec and sets
     the main branch to track its remote branch, so fetch and pull behave as
@@ -1703,12 +1703,12 @@ class WorktreePlugin(Plugin):
     remain, and every other local branch is deleted. Add ``--bare`` to skip
     the refspec rewrite. The clone still gets the ``.git`` file and the main
     worktree. With no <path>, ``clone --worktree`` uses the current directory
-    itself as the top-level directory, where a plain clone makes a new one.
+    itself as the umbrella, where a plain clone makes a new one.
 
     ``init --worktree`` converts an existing clone in place.  The workarea must
-    be clean.  The conversion deletes every file in the top-level directory
-    except the git directory, so preserve anything there that is not part of
-    the repository.  Only the main branch gets a worktree, so a different
+    be clean.  The conversion deletes every file in the umbrella except the
+    git directory, so preserve anything there that is not part of the
+    repository.  Only the main branch gets a worktree, so a different
     checked-out branch gets none, though one is easy to add afterward. To
     convert a clone you work in, with its branches and linked worktrees, use
     ``worktree migrate`` instead.
@@ -1718,8 +1718,8 @@ class WorktreePlugin(Plugin):
     cannot know which remote each branch should go to.
 
     ``worktree migrate`` converts a flat clone, one whose ``.git`` is a
-    directory, to the worktree layout. Every branch, ref, stash and config
-    value stays. Each linked worktree moves into the top-level directory. The
+    directory, to the umbrella layout. Every branch, ref, stash and config
+    value stays. Each linked worktree moves into the umbrella. The
     files of the main worktree, ignored ones too, move into a worktree named
     for the main branch. Without ``--apply`` it prints each step and changes
     nothing.
@@ -1978,7 +1978,7 @@ class WorktreePlugin(Plugin):
             worktree_subparser,
             "migrate",
             "worktree-migrate",
-            help="Convert a flat clone to the worktree layout",
+            help="Convert a flat clone to the umbrella layout",
         )
 
         # A dry run must leave the config as it was.
@@ -1992,7 +1992,7 @@ class WorktreePlugin(Plugin):
             help="Make the changes, instead of only printing them",
         )
 
-        # add a clone option to create a worktree layout.
+        # add a clone option to create a umbrella layout.
         clone_parser = parser_manager.find_parser("clone")
         if clone_parser:
             clone_parser.add_argument(
@@ -2001,7 +2001,7 @@ class WorktreePlugin(Plugin):
                 help="Create a layout convenient for worktree use",
             )
 
-        # add an init option to create a worktree layout.
+        # add an init option to create a umbrella layout.
         init_parser = parser_manager.find_parser("init")
         if init_parser:
             init_parser.add_argument(
@@ -2059,7 +2059,7 @@ class WorktreePlugin(Plugin):
     def _setup_main_worktree(
         self, main, p_git, p_gitproject, p_project, path, clargs
     ):
-        """Create a main woorktree for a newly-created worktree layout."""
+        """Create a main worktree for a newly-created umbrella layout."""
         # Set up a main worktree.
         main_branch = p_git.refname_to_branch_name(main)
 
@@ -2109,7 +2109,7 @@ class WorktreePlugin(Plugin):
                     if not main:
                         main = self._choose_main_branch(p_git)
 
-                    write_container_gitdir(Path(path).parent, Path(path).name)
+                    write_umbrella_gitdir(Path(path).parent, Path(path).name)
 
                     # Detach HEAD so we can worktree main.
                     p_git.detach_head()
@@ -2131,7 +2131,7 @@ class WorktreePlugin(Plugin):
 
             clone_parser.set_defaults(func=worktree_command_clone)
 
-        # If an init is done, set up a main worktree layout if told to.
+        # If an init is done, set up an umbrella layout if told to.
         init_parser = parser_manager.find_parser("init")
         if init_parser:
             command_init = init_parser.get_default("func")
@@ -2152,7 +2152,7 @@ class WorktreePlugin(Plugin):
                         p_git.get_remote_url(remote)
                     except KeyError:
                         raise GitProjectError(
-                            f"Cannot initialize worktree layout, no remote named {remote}"
+                            f"Cannot initialize umbrella layout, no remote named {remote}"
                         ) from None
 
                     main = self._choose_main_branch(p_git)
@@ -2161,7 +2161,7 @@ class WorktreePlugin(Plugin):
                     if not p_git.is_bare_repository():
                         if not p_git.workarea_is_clean():
                             raise GitProjectError(
-                                "Cannot initialize worktree layout, working copy not clean"
+                                "Cannot initialize umbrella layout, working copy not clean"
                             )
 
                         gitdir = Path(p_git.get_gitdir())
@@ -2170,7 +2170,7 @@ class WorktreePlugin(Plugin):
 
                         if gitdir != workarea_root / ".git":
                             raise GitProjectError(
-                                "Not creating worktree layout -- are you in a worktree?"
+                                "Not creating umbrella layout -- are you in a worktree?"
                             )
 
                         # Set bare and detach before removing files so they
@@ -2213,7 +2213,7 @@ class WorktreePlugin(Plugin):
                         # the same way it did before. The already-bare path
                         # below keeps its .git as the clone itself, so only
                         # the renamed case gets a pointer.
-                        write_container_gitdir(workarea_root, newgitdir.name)
+                        write_umbrella_gitdir(workarea_root, newgitdir.name)
 
                     if was_bare:
                         workarea_root = Path(p_git.get_gitdir()).parent

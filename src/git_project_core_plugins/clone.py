@@ -66,7 +66,7 @@ class ClonePlugin(Plugin):
     authenticate.
 
     Plugins add options to clone. For example, the worktree command adds a
-    --worktree option to have clone create a ``worktree layout``.
+    --worktree option to have clone create an ``umbrella layout``.
 
     See also::
 

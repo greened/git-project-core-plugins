@@ -50,11 +50,11 @@ Setup
 
   pip install git-project-core-plugins
 
-Worktree environment
-====================
+Umbrella layout
+===============
 
-A number of commands can have knowledge of a "worktree environment" with a
-specific layout::
+A number of commands know about an "umbrella layout", where one directory,
+the umbrella, holds a bare repository and its worktrees::
 
   <path>
     .<name>.git
@@ -66,7 +66,7 @@ specific layout::
 That is, either a bare clone is done, or an existing clone is converted to a
 bare clone via ``git <project> init --worktree``.  The bare repository is the
 hidden ``.<name>.git`` child, named for the last component of the remote url,
-and ``<path>`` holds it alongside the worktrees. The ``.git`` beside it is a
+and the umbrella ``<path>`` holds it alongside the worktrees. The ``.git`` beside it is a
 file holding ``gitdir: .<name>.git``, so git works from ``<path>`` too. It is
 a file, not a directory or a symlink, because a go build run from ``<path>``
 fails if ``.git`` resolves to a directory there. A repository that is already

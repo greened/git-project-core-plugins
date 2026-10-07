@@ -30,6 +30,10 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Changed
+.......
+- The docs, help text and error messages call the worktree layout the
+  umbrella layout, and its top-level directory the umbrella.
 
 `0.0.31`_ - 2026-10-07
 ----------------------

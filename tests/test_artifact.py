@@ -346,9 +346,9 @@ def test_artifact_remove_refuses_protected_paths(tmp_path, monkeypatch):
 
     from git_project_core_plugins.artifact import remove_artifact_path
 
-    container = tmp_path / "container"
-    common_dir = container / ".proj.git"
-    workdir = container / "main"
+    umbrella = tmp_path / "umbrella"
+    common_dir = umbrella / ".proj.git"
+    workdir = umbrella / "main"
     home = tmp_path / "home"
     for d in (common_dir, workdir / "build", home / "cache"):
         d.mkdir(parents=True)
@@ -356,18 +356,18 @@ def test_artifact_remove_refuses_protected_paths(tmp_path, monkeypatch):
     git = _GuardGit(workdir, common_dir)
 
     # Each of these is a protected path or contains one.
-    for path in (workdir, container, common_dir, home, tmp_path):
+    for path in (workdir, umbrella, common_dir, home, tmp_path):
         with pytest.raises(GitProjectError, match="Refusing to remove"):
             remove_artifact_path(str(path), git)
         assert path.exists()
 
     # A glob that matches a protected path is refused too, and removes
     # nothing, not even the matches that sort before the protected one.
-    (container / "aaa").mkdir()
+    (umbrella / "aaa").mkdir()
     with pytest.raises(GitProjectError, match="Refusing to remove"):
-        remove_artifact_path(f"{container}/*", git)
+        remove_artifact_path(f"{umbrella}/*", git)
     assert workdir.exists()
-    assert (container / "aaa").exists()
+    assert (umbrella / "aaa").exists()
 
     # Inside a protected path is fine.
     remove_artifact_path(str(workdir / "build"), git)
@@ -383,10 +383,10 @@ def test_artifact_remove_resolves_relative_common_dir(tmp_path, monkeypatch):
 
     # Plain git worktree add writes a relative commondir, which git reads
     # relative to the worktree's own gitdir.
-    container = tmp_path / "container"
-    common_dir = container / ".proj.git"
+    umbrella = tmp_path / "umbrella"
+    common_dir = umbrella / ".proj.git"
     gitdir = common_dir / "worktrees" / "main"
-    workdir = container / "main"
+    workdir = umbrella / "main"
     elsewhere = tmp_path / "elsewhere"
     for d in (gitdir, workdir, elsewhere):
         d.mkdir(parents=True)
