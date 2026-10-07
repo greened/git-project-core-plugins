@@ -414,6 +414,10 @@ class _MigratePlan:
     ref_snapshot: list[str] = field(default_factory=list)
     core_bare: str | None = None
     head_oid: str = ""
+    # A store already bare at <top>/.git, with its worktrees in <top>.
+    bare_at_root: bool = False
+    # (commondir file, its absolute value), each rewritten as ../..
+    commondirs: list[tuple[Path, str]] = field(default_factory=list)
 
 
 def _git(*args):
@@ -482,8 +486,11 @@ def _status_paths(status):
     return paths
 
 
-def _check_worktree(plan, path, record, top):
-    """Add a refusal for each reason the worktree at path cannot move."""
+def _check_worktree(plan, path, record, top, inside_top=False):
+    """Add a refusal for each reason the worktree at path cannot migrate. With
+    inside_top, the worktree stays where it is and must be inside top.
+
+    """
     refusals = plan.refusals
     if "locked" in record:
         refusals.append(f"{path} is locked")
@@ -522,6 +529,13 @@ def _check_worktree(plan, path, record, top):
 
     if os.path.lexists(path / ".gitmodules"):
         refusals.append(f"{path} has submodules")
+    if inside_top:
+        # Nothing moves and no index is reset, so these checks below do not
+        # apply.
+        if not path.is_relative_to(top):
+            refusals.append(f"{path} is outside {top}")
+        return
+
     sparse = _git_or_none(
         "-C", str(path), "config", "--bool", "core.sparseCheckout"
     )
@@ -541,6 +555,121 @@ def _check_worktree(plan, path, record, top):
             refusals.append(f"{path} is inside {top}")
         if path.stat().st_dev != top.stat().st_dev:
             refusals.append(f"{path} is on a different filesystem from {top}")
+
+
+def _plan_store_new(plan, ns, gitdir_args):
+    """Name the new store for the project remote. Return False on a refusal
+    that stops the plan.
+
+    """
+    top = plan.top
+    remotes = _git_or_none(*gitdir_args, "config", "--get-all", f"{ns}.remote")
+    remote = remotes.splitlines()[0].strip() if remotes else "origin"
+    # The url can hold a credential, so it is never printed or stored.
+    url = _git_or_none(*gitdir_args, "config", "--get", f"remote.{remote}.url")
+    if not url or not url.strip():
+        plan.refusals.append(f"remote {remote} has no url")
+        return False
+    store_name = get_hidden_gitdir_name(url.strip())
+    store_new = top / store_name
+    if store_name in (".", "..", ".git") or store_new.resolve().parent != top:
+        plan.refusals.append(
+            f"remote {remote} gives an unusable directory name"
+        )
+        return False
+    plan.store_new = store_new
+    if os.path.lexists(store_new):
+        plan.refusals.append(f"{store_new} already exists")
+    return True
+
+
+def _plan_bare_at_root(git, project, plan, gitdir_args):
+    """Plan the rename of a store already bare at <top>/.git. No worktree
+    moves, so no worktree config changes.
+
+    """
+    top = plan.top
+    store_old = plan.store_old
+    records = _parse_worktree_list(
+        _git(*gitdir_args, "worktree", "list", "--porcelain", "-z")
+    )
+    # git lists a bare store named .git as its parent directory.
+    if (
+        not records
+        or Path(records[0]["worktree"]).resolve() not in (store_old, top)
+        or "bare" not in records[0]
+    ):
+        plan.refusals.append(f"{store_old} is not listed as bare")
+        return
+    if len(records) == 1:
+        plan.refusals.append(f"{store_old} has no worktrees")
+        return
+    # A store with core.bare set by hand can still have a checkout in top,
+    # which nothing here would carry over.
+    if (store_old / "index").exists():
+        plan.refusals.append(f"{store_old} has an index")
+    # Walk each directory from top down to each worktree. Anything there
+    # that is not a dotfile or on the way to a worktree could be a checkout.
+    paths = {Path(record["worktree"]).resolve() for record in records[1:]}
+    on_path = set()
+    for path in paths:
+        if path.is_relative_to(top) and not path.is_relative_to(store_old):
+            on_path.add(path)
+            on_path.update(path.parents)
+    for directory in sorted(on_path - paths):
+        if not directory.is_relative_to(top):
+            continue
+        try:
+            entries = sorted(os.listdir(directory))
+        except OSError:
+            plan.refusals.append(f"cannot read {directory}")
+            continue
+        for entry in entries:
+            if not entry.startswith(".") and directory / entry not in on_path:
+                plan.refusals.append(f"{directory / entry} is not a worktree")
+
+    admin_root = store_old / "worktrees"
+    for record in records[1:]:
+        path = Path(record["worktree"]).resolve()
+        # The rename would carry it into the new store.
+        if path.is_relative_to(store_old):
+            plan.refusals.append(f"{path} is inside {store_old}")
+            continue
+        _check_worktree(plan, path, record, top, inside_top=True)
+        branch = git.refname_to_branch_name(record.get("branch", ""))
+        plan.linked.append(_MigrateWorktree(path, path, branch, path.name))
+
+        gitdir = _git_or_none(
+            "-C", str(path), "rev-parse", "--absolute-git-dir"
+        )
+        if gitdir is None:
+            continue
+        admin = Path(gitdir.strip()).resolve()
+        if admin.parent != admin_root:
+            plan.refusals.append(f"{path}: {admin} is not in {admin_root}")
+            continue
+        # The repair rewrites only the two gitdir links. An absolute
+        # commondir keeps naming the old store, which is gone after the rename.
+        commondir = admin / "commondir"
+        try:
+            value = commondir.read_text().strip()
+        except OSError:
+            plan.refusals.append(f"{path}: cannot read {commondir}")
+            continue
+        target = Path(value)
+        if not target.is_absolute():
+            target = admin / target
+        if target.resolve() != store_old:
+            plan.refusals.append(f"{commondir} names another repository")
+        elif Path(value).is_absolute():
+            plan.commondirs.append((commondir, value))
+
+    if not _plan_store_new(plan, project.get_section(), gitdir_args):
+        return
+
+    plan.ref_snapshot = sorted(
+        _git(*gitdir_args, "for-each-ref", _REFS_FORMAT).splitlines()
+    )
 
 
 def _plan_migration(git, project):
@@ -576,16 +705,13 @@ def _plan_migration(git, project):
     bare = _git_or_none(
         "--git-dir", str(store_old), "config", "--bool", "core.bare"
     )
-    if (
-        store_old.name != ".git"
-        or not store_old.is_dir()
-        or (bare is not None and bare.strip() == "true")
-    ):
+    if store_old.name != ".git" or not store_old.is_dir():
         plan.refusals.append("already converted or not a main clone")
         return plan
     plan.top = top
     plan.store_old = store_old
     plan.core_bare = bare.strip() if bare is not None else None
+    plan.bare_at_root = plan.core_bare == "true"
     gitdir_args = ("--git-dir", str(store_old))
 
     # Either would keep the store non-bare after the migration sets core.bare.
@@ -595,6 +721,10 @@ def _plan_migration(git, project):
     config_worktree = store_old / "config.worktree"
     if config_worktree.is_file():
         for key in ("core.bare", "core.worktree"):
+            # git sparse-checkout moves core.bare here, which is what makes
+            # a bare store bare.
+            if key == "core.bare" and plan.bare_at_root:
+                continue
             if _git_or_none("config", "-f", str(config_worktree), key):
                 plan.refusals.append(f"{config_worktree} sets {key}")
     # The repair writes absolute links, which would silently drop the mode.
@@ -607,6 +737,10 @@ def _plan_migration(git, project):
             plan.refusals.append(f"{key} is not a boolean")
         elif flag.strip() != "false":
             plan.refusals.append(f"{key} is true")
+
+    if plan.bare_at_root:
+        _plan_bare_at_root(git, project, plan, gitdir_args)
+        return plan
 
     records = _parse_worktree_list(
         _git("-C", str(top), "worktree", "list", "--porcelain", "-z")
@@ -650,23 +784,9 @@ def _plan_migration(git, project):
             f"checked out, not {main_branch}"
         )
 
-    remotes = _git_or_none(*gitdir_args, "config", "--get-all", f"{ns}.remote")
-    remote = remotes.splitlines()[0].strip() if remotes else "origin"
-    # The url can hold a credential, so it is never printed or stored.
-    url = _git_or_none(*gitdir_args, "config", "--get", f"remote.{remote}.url")
-    if not url or not url.strip():
-        plan.refusals.append(f"remote {remote} has no url")
+    if not _plan_store_new(plan, ns, gitdir_args):
         return plan
-    store_name = get_hidden_gitdir_name(url.strip())
-    store_new = top / store_name
-    if store_name in (".", "..", ".git") or store_new.resolve().parent != top:
-        plan.refusals.append(
-            f"remote {remote} gives an unusable directory name"
-        )
-        return plan
-    plan.store_new = store_new
-    if os.path.lexists(store_new):
-        plan.refusals.append(f"{store_new} already exists")
+    store_name = plan.store_new.name
 
     worktrees = [(top, main_branch, _migrate_dir_name(main_branch))]
     prefix = f"{top.name}-"
@@ -864,8 +984,33 @@ def _plan_steps(plan, main):
     return lines
 
 
+def _bare_plan_steps(plan):
+    """Return the steps of a bare-at-root plan as printable lines."""
+    lines = [f"write {plan.store_old / _MIGRATE_MANIFEST}"]
+    for commondir, _ in plan.commondirs:
+        lines.append(f"write {commondir}: ../..")
+    lines.append(f"rename {plan.store_old} -> {plan.store_new}")
+    lines.append(f"write {plan.top / '.git'}: gitdir: {plan.store_new.name}")
+    lines.append(
+        shlex.join(
+            [
+                "git",
+                f"--git-dir={plan.store_new}",
+                "worktree",
+                "repair",
+                *[str(worktree.new) for worktree in plan.linked],
+            ]
+        )
+    )
+    return lines
+
+
 def _print_plan(plan):
-    if plan.main is not None:
+    if plan.bare_at_root:
+        if not plan.refusals:
+            for line in _bare_plan_steps(plan):
+                print(line)
+    elif plan.main is not None:
         for line in _plan_steps(plan, plan.main):
             print(line)
     for key in plan.stale_config:
@@ -1112,22 +1257,123 @@ def _apply(plan, main, git, project):
         manifest["complete"] = True
         done(step)
     except BaseException as exception:
-        manifest["failed_step"] = step
-        manifest["error"] = str(exception)
-        if not manifest_path.parent.is_dir():
-            # The stop came inside rename_store, before the rename.
-            manifest_path = plan.store_old / _MIGRATE_MANIFEST
-        try:
-            _write_manifest(manifest_path, manifest)
-        except OSError:
-            pass
-        steps = ", ".join(manifest["steps_done"]) or "none"
-        reason = f": {exception}" if str(exception) else ""
-        message = (
-            f"worktree migrate failed at step {step}{reason}. "
-            f"Steps done: {steps}. "
-            f"The manifest is {manifest_path}. To undo the steps done, see "
-            "Manual rollback in the worktree help."
+        message = _record_failure(
+            plan, manifest, manifest_path, step, exception
+        )
+        if not isinstance(exception, Exception):
+            print(message)
+            raise
+        raise GitProjectError(message) from exception
+
+
+def _record_failure(plan, manifest, manifest_path, step, exception):
+    """Journal the failed step and return an error message that names the
+    manifest.
+
+    """
+    manifest["failed_step"] = step
+    manifest["error"] = str(exception)
+    if not manifest_path.parent.is_dir():
+        # The stop came inside rename_store, before the rename.
+        manifest_path = plan.store_old / _MIGRATE_MANIFEST
+    try:
+        _write_manifest(manifest_path, manifest)
+    except OSError:
+        pass
+    steps = ", ".join(manifest["steps_done"]) or "none"
+    reason = f": {exception}" if str(exception) else ""
+    message = (
+        f"worktree migrate failed at step {step}{reason}. "
+        f"Steps done: {steps}. "
+        f"The manifest is {manifest_path}. To undo the steps done, see "
+        "Manual rollback in the worktree help."
+    )
+    return message
+
+
+def _apply_bare_at_root(plan, git):
+    """Carry out a bare-at-root plan, journaling each step into the
+    manifest. Stop at the first failure.
+
+    """
+    store_new = plan.store_new
+    manifest_path = plan.store_old / _MIGRATE_MANIFEST
+    manifest: dict = {
+        "version": 1,
+        "form": "bare_at_root",
+        "top": str(plan.top),
+        "store_old": str(plan.store_old),
+        "store_new": str(store_new),
+        "linked": [_worktree_record(worktree) for worktree in plan.linked],
+        "commondirs": [
+            {"path": str(path), "prior": prior}
+            for path, prior in plan.commondirs
+        ],
+        "current_step": None,
+        "steps_done": [],
+        "complete": False,
+    }
+
+    def start(step):
+        manifest["current_step"] = step
+        _write_manifest(manifest_path, manifest)
+
+    def done(step):
+        manifest["steps_done"].append(step)
+        manifest["current_step"] = None
+        _write_manifest(manifest_path, manifest)
+
+    step = "manifest"
+    try:
+        _write_manifest(manifest_path, manifest)
+
+        # ../.. names the store before and after the rename, so these
+        # need no undo.
+        for commondir, _ in plan.commondirs:
+            step = f"rewrite_commondir {commondir.parent.name}"
+            start(step)
+            tmp = commondir.with_name(commondir.name + ".tmp")
+            try:
+                tmp.write_text("../..\n")
+                os.replace(tmp, commondir)
+            finally:
+                tmp.unlink(missing_ok=True)
+            done(step)
+
+        step = "rename_store"
+        start(step)
+        # Set first, so a stop after the rename still finds the manifest.
+        manifest_path = store_new / _MIGRATE_MANIFEST
+        os.rename(plan.store_old, store_new)
+        done(step)
+
+        step = "write_pointer"
+        start(step)
+        write_container_gitdir(plan.top, store_new.name)
+        done(step)
+
+        step = "repair"
+        start(step)
+        _git(
+            "--git-dir",
+            str(store_new),
+            "worktree",
+            "repair",
+            *[str(worktree.new) for worktree in plan.linked],
+        )
+        # git-project checks the config after the command, and the old
+        # path is gone.
+        git.reinit(store_new)
+        done(step)
+
+        step = "verify"
+        start(step)
+        _verify(plan, plan.linked)
+        manifest["complete"] = True
+        done(step)
+    except BaseException as exception:
+        message = _record_failure(
+            plan, manifest, manifest_path, step, exception
         )
         if not isinstance(exception, Exception):
             print(message)
@@ -1154,6 +1400,10 @@ def command_worktree_migrate(git, gitproject, project, clargs):
         )
         return 0
 
+    if plan.bare_at_root:
+        _apply_bare_at_root(plan, git)
+        print(f"Migrated {plan.top}. The manifest is in {plan.store_new}.")
+        return 0
     if plan.main is None:
         raise GitProjectError("worktree migrate found no main worktree")
     _apply(plan, plan.main, git, project)
@@ -1318,6 +1568,24 @@ class WorktreePlugin(Plugin):
     that records absolute paths, such as a Python virtualenv, may need to be
     made again.
 
+    ``worktree migrate`` also converts a store that is already bare at
+    <top>/.git, with its worktrees inside <top>. It renames the store to the
+    hidden name, writes the ``.git`` file and repairs each worktree. A
+    worktree's ``commondir`` file that holds an absolute path is rewritten
+    as ``../..``, because the repair leaves it naming the old store. No
+    worktree moves and no config changes. The checks above apply to each
+    worktree, except the sparse checkout, assume-unchanged, skip-worktree and
+    filesystem checks. Those matter only when files move or an index is
+    reset. It also refuses a worktree outside <top> or inside the store, and
+    a store with no worktrees. It refuses a store with an index. It looks in
+    <top> and in each directory between <top> and a worktree, and refuses
+    an entry there that holds no worktree, unless its name starts with
+    ``.``. An index or such an entry can mean a checkout that ``core.bare``
+    hides. It refuses a
+    ``commondir`` that names another repository. A ``core.bare`` in the
+    store's ``config.worktree`` is allowed, since ``git sparse-checkout``
+    puts it there.
+
     ``--apply`` writes the plan to ``git-project-migrate.json`` in the git
     directory. Before each step runs, its name goes in ``current_step``.
     When the step finishes, it is added to the ``steps_done`` list. The
@@ -1364,6 +1632,21 @@ class WorktreePlugin(Plugin):
       git -C <top> worktree repair <old>...
       # write_config: undo it either way. Set each config_writes key
       # back to its prior value, or unset it when prior is null.
+      # last, remove the manifest
+      rm -f <top>/.git/git-project-migrate.json
+      rm -f <top>/.git/git-project-migrate.json.tmp
+
+    A bare store at <top>/.git has a manifest with ``form`` set to
+    ``bare_at_root``. Each <path> is a ``linked`` entry. The ``verify`` step
+    needs no undo. The repair command below undoes ``repair``. The
+    ``rewrite_commondir`` steps need no undo, since ``../..`` names the store
+    at either path::
+
+      # write_pointer: done when <top>/.git is a file
+      rm <top>/.git
+      # rename_store: done when <store_new> exists
+      mv <store_new> <top>/.git
+      git --git-dir=<top>/.git worktree repair <path>...
       # last, remove the manifest
       rm -f <top>/.git/git-project-migrate.json
       rm -f <top>/.git/git-project-migrate.json.tmp

@@ -30,6 +30,17 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Added
+.....
+- ``worktree migrate`` converts a store already bare at ``<top>/.git``
+  with its worktrees inside ``<top>``. It renames the store to the hidden
+  name, writes the ``.git`` file and repairs each worktree. An absolute
+  ``commondir`` becomes ``../..``, so each worktree finds the renamed
+  store. Worktrees may be nested, such as ``<top>/x/b1``. A file or
+  directory on the way to a worktree that holds no worktree is refused,
+  unless its name starts with ``.``. Sparse checkouts and skip-worktree
+  files are allowed in this form.
+
 Changed
 .......
 - A ``worktree migrate --apply`` failure prints the reason as well as the

@@ -146,3 +146,50 @@ def flat_clone(request, monkeypatch, remote_repository, tmp_path_factory):
         feature=feature,
         store=top / get_hidden_gitdir_name(url),
     )
+
+
+@pytest.fixture(scope="function")
+def bare_at_root_clone(monkeypatch, remote_repository, tmp_path_factory):
+    """A store bare at <top>/.git with two worktrees in <top>. One
+    worktree's commondir is absolute.
+
+    """
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+    def git(*args):
+        subprocess.run(["git", *args], check=True, capture_output=True)
+
+    base = tmp_path_factory.mktemp("bare").resolve()
+    top = base / "proj"
+    gitdir = top / ".git"
+    url = "file://" + remote_repository.path
+    git("clone", "-q", "--bare", url, str(gitdir))
+    git("--git-dir", str(gitdir), "branch", "topic", "pushed")
+
+    master = top / "master"
+    topic = top / "topic"
+    git(
+        "--git-dir",
+        str(gitdir),
+        "worktree",
+        "add",
+        "-q",
+        str(master),
+        "master",
+    )
+    git("--git-dir", str(gitdir), "worktree", "add", "-q", str(topic), "topic")
+    commondir = gitdir / "worktrees" / "topic" / "commondir"
+    commondir.write_text(f"{gitdir}\n")
+
+    git("--git-dir", str(gitdir), "config", "project.branch", "master")
+    git("--git-dir", str(gitdir), "config", "project.remote", "origin")
+
+    return SimpleNamespace(
+        base=base,
+        top=top,
+        master=master,
+        topic=topic,
+        commondir=commondir,
+        store=top / get_hidden_gitdir_name(url),
+    )

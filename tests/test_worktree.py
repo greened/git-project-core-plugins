@@ -28,6 +28,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import common
 import git_project
@@ -1732,3 +1733,336 @@ def test_worktree_migrate_verify_names_dirty_paths(
     assert "stray10" not in result.stdout
     manifest = json.loads((fc.store / "git-project-migrate.json").read_text())
     assert "stray00" in manifest["error"]
+
+
+def test_worktree_migrate_bare_at_root_dry_run(
+    bare_at_root_clone, script_runner
+):
+    fc = bare_at_root_clone
+    gitdir = fc.top / ".git"
+    before = _snapshot(fc)
+
+    result = _migrate(script_runner, fc.top)
+
+    assert result.success, result.stdout + result.stderr
+    assert _snapshot(fc) == before
+    assert f"write {fc.commondir}: ../.." in result.stdout
+    assert f"rename {gitdir} -> {fc.store}" in result.stdout
+    assert f"write {gitdir}: gitdir: {fc.store.name}" in result.stdout
+    assert f"worktree repair {fc.master} {fc.topic}" in result.stdout
+    # Already relative, so left alone.
+    assert "worktrees/master/commondir" not in result.stdout
+    assert "Dry run, the migration changed nothing." in result.stdout
+
+
+@pytest.mark.parametrize("cwd", ["", "topic"])
+def test_worktree_migrate_bare_at_root_apply(
+    bare_at_root_clone, script_runner, cwd
+):
+    fc = bare_at_root_clone
+    top = fc.top
+    refs = _out("-C", str(top), "for-each-ref")
+    config = _out("-C", str(top), "config", "--list", "--local")
+
+    result = _migrate(script_runner, top / cwd, "--apply")
+
+    assert result.success, result.stdout + result.stderr
+    check_container_gitdir(top, fc.store.name)
+    store = str(fc.store)
+    assert _out("--git-dir", store, "config", "--bool", "core.bare") == (
+        "true\n"
+    )
+    assert _out("--git-dir", store, "for-each-ref") == refs
+    assert _worktree_branches(fc.store) == {
+        fc.store: None,
+        fc.master: "refs/heads/master",
+        fc.topic: "refs/heads/topic",
+    }
+    for path in (fc.master, fc.topic):
+        assert _out("-C", str(path), "status", "--porcelain") == ""
+        assert (
+            _out("-C", str(path), "rev-parse", "--git-common-dir").strip()
+            == store
+        )
+    admin = fc.store / "worktrees"
+    for name in ("master", "topic"):
+        assert (admin / name / "commondir").read_text() == "../..\n"
+    # No worktree moved, so the config is as it was.
+    assert _out("-C", str(top), "config", "--list", "--local") == config
+
+    manifest = json.loads((fc.store / "git-project-migrate.json").read_text())
+    assert manifest["form"] == "bare_at_root"
+    assert manifest["complete"] is True
+    assert manifest["steps_done"][-1] == "verify"
+
+
+def test_worktree_migrate_bare_at_root_twice_refuses(
+    bare_at_root_clone, script_runner
+):
+    fc = bare_at_root_clone
+    assert _migrate(script_runner, fc.top, "--apply").success
+    before = _snapshot(fc)
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert not result.success
+    assert "already converted or not a main clone" in result.stdout
+    assert _snapshot(fc) == before
+
+
+def _bare_outside(fc):
+    path = fc.base / "outside"
+    _out("--git-dir", str(fc.top / ".git"), "worktree", "add", "-q", str(path))
+    return f"{path} is outside {fc.top}"
+
+
+def _bare_dirty(fc):
+    (fc.topic / "Goodbyte.txt").write_text("changed\n")
+    return f"{fc.topic} has uncommitted changes"
+
+
+def _bare_foreign_commondir(fc):
+    # A working copy, so only the commondir check refuses it.
+    other = fc.base / "other.git"
+    shutil.copytree(fc.top / ".git", other, symlinks=True)
+    fc.commondir.write_text(f"{other}\n")
+    return f"{fc.commondir} names another repository"
+
+
+def _bare_no_worktrees(fc):
+    for path in (fc.master, fc.topic):
+        _out(
+            "--git-dir", str(fc.top / ".git"), "worktree", "remove", str(path)
+        )
+    return f"{fc.top / '.git'} has no worktrees"
+
+
+def _bare_inside_store(fc):
+    path = fc.top / ".git" / "inner"
+    gitdir = str(fc.top / ".git")
+    _out("--git-dir", gitdir, "worktree", "add", "-q", "-b", "b1", str(path))
+    return f"{path} is inside {fc.top / '.git'}"
+
+
+def _bare_store_exists(fc):
+    fc.store.mkdir()
+    return f"{fc.store} already exists"
+
+
+def _bare_detached(fc):
+    _out("-C", str(fc.topic), "checkout", "-q", "--detach")
+    return f"{fc.topic} has a detached HEAD"
+
+
+def _bare_stray_entry(fc):
+    (fc.top / "README").write_text("stray\n")
+    return f"{fc.top / 'README'} is not a worktree"
+
+
+def _bare_nested_stray(fc):
+    path = fc.top / "x" / "b1"
+    gitdir = str(fc.top / ".git")
+    _out("--git-dir", gitdir, "worktree", "add", "-q", "-b", "b1", str(path))
+    (fc.top / "x" / "junk").write_text("stray\n")
+    return f"{fc.top / 'x' / 'junk'} is not a worktree"
+
+
+def _bare_nested_missing(fc):
+    path = fc.top / "x" / "b1"
+    gitdir = str(fc.top / ".git")
+    _out("--git-dir", gitdir, "worktree", "add", "-q", "-b", "b1", str(path))
+    shutil.rmtree(fc.top / "x")
+    return f"cannot read {fc.top / 'x'}"
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        _bare_nested_missing,
+        _bare_nested_stray,
+        _bare_outside,
+        _bare_dirty,
+        _bare_foreign_commondir,
+        _bare_no_worktrees,
+        _bare_inside_store,
+        _bare_store_exists,
+        _bare_detached,
+        _bare_stray_entry,
+    ],
+)
+def test_worktree_migrate_bare_at_root_refuses(
+    bare_at_root_clone, script_runner, setup
+):
+    fc = bare_at_root_clone
+    reason = setup(fc)
+    before = _snapshot(fc)
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert not result.success
+    assert f"refuse: {reason}" in result.stdout
+    assert _snapshot(fc) == before
+
+
+def _fail_replace(name):
+    """Fail the os.replace onto a path with this name."""
+
+    def inject(monkeypatch, module):
+        real_replace = os.replace
+
+        def failing_replace(src, dst, *args, **kwargs):
+            if Path(dst).name == name:
+                raise OSError("injected replace failure")
+            return real_replace(src, dst, *args, **kwargs)
+
+        monkeypatch.setattr(module.os, "replace", failing_replace)
+
+    return inject
+
+
+def _rollback_bare(manifest):
+    """Follow the bare-at-root manual rollback in the worktree help."""
+    done = set(manifest["steps_done"])
+    pending = manifest.get("failed_step") or manifest["current_step"]
+    top = Path(manifest["top"])
+    gitdir = manifest["store_old"]
+    store_new = Path(manifest["store_new"])
+
+    def undo(step, is_done=True):
+        return step in done or (step == pending and is_done)
+
+    if undo("write_pointer", (top / ".git").is_file()):
+        os.unlink(top / ".git")
+    if undo("rename_store", store_new.exists()):
+        os.rename(store_new, gitdir)
+        _out(
+            "--git-dir",
+            gitdir,
+            "worktree",
+            "repair",
+            *[w["new"] for w in manifest["linked"]],
+        )
+    for name in ("git-project-migrate.json", "git-project-migrate.json.tmp"):
+        Path(top / ".git" / name).unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize(
+    "inject, failed, last_done",
+    [
+        (_fail_replace("commondir"), "rewrite_commondir topic", None),
+        (_fail_rename(".git"), "rename_store", "rewrite_commondir topic"),
+        (_fail_write_pointer, "write_pointer", "rename_store"),
+        (_fail_repair, "repair", "write_pointer"),
+        (_fail_verify, "verify", "repair"),
+    ],
+)
+def test_worktree_migrate_bare_at_root_stops_on_failure(
+    bare_at_root_clone, script_runner, monkeypatch, inject, failed, last_done
+):
+    from git_project_core_plugins import worktree as worktree_module
+
+    fc = bare_at_root_clone
+    top = fc.top
+    before = _snapshot(fc, internals=False)
+
+    with monkeypatch.context() as patch:
+        inject(patch, worktree_module)
+        result = _migrate(script_runner, top, "--apply")
+
+    assert not result.success
+    store = fc.store if fc.store.is_dir() else top / ".git"
+    manifest_path = store / "git-project-migrate.json"
+    assert f"failed at step {failed}" in result.stdout
+    assert str(manifest_path) in result.stdout
+    manifest = json.loads(manifest_path.read_text())
+    assert manifest["failed_step"] == failed
+    assert manifest["steps_done"][-1:] == ([last_done] if last_done else [])
+
+    _rollback_bare(manifest)
+
+    assert _snapshot(fc, internals=False) == before
+    for path in (fc.master, fc.topic):
+        assert _out("-C", str(path), "status", "--porcelain") == ""
+    assert not os.path.lexists(fc.store)
+    assert not (fc.commondir.parent / "commondir.tmp").exists()
+
+
+def test_worktree_migrate_bare_at_root_admin_name_differs(
+    bare_at_root_clone, script_runner
+):
+    fc = bare_at_root_clone
+    gitdir = str(fc.top / ".git")
+    old, new = fc.top / "other", fc.top / "renamed"
+    _out("--git-dir", gitdir, "worktree", "add", "-q", "-b", "b1", str(old))
+    _out("--git-dir", gitdir, "worktree", "move", str(old), str(new))
+    assert (fc.top / ".git" / "worktrees" / "other").is_dir()
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert result.success, result.stdout + result.stderr
+    assert _out("-C", str(new), "status", "--porcelain") == ""
+    assert _worktree_branches(fc.store)[new] == "refs/heads/b1"
+
+
+def test_worktree_migrate_refuses_bare_flag_on_a_checkout(
+    remote_repository, script_runner, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    base = tmp_path.resolve()
+    top = base / "proj"
+    _out("clone", "-q", "file://" + remote_repository.path, str(top))
+    _out("-C", str(top), "worktree", "add", "-q", str(top / "topic"), "pushed")
+    _out("-C", str(top), "config", "core.bare", "true")
+    _out("--git-dir", str(top / ".git"), "config", "project.branch", "master")
+    _out("--git-dir", str(top / ".git"), "config", "project.remote", "origin")
+    fc = SimpleNamespace(base=base, top=top)
+    before = _snapshot(fc)
+
+    result = _migrate(script_runner, top)
+
+    assert not result.success
+    assert f"refuse: {top / '.git'} has an index" in result.stdout
+    assert f"refuse: {top / 'Hello.txt'} is not a worktree" in result.stdout
+    assert _snapshot(fc) == before
+
+
+def _bare_sparse(fc):
+    _out("-C", str(fc.topic), "sparse-checkout", "set", "nothing")
+    return [fc.topic]
+
+
+def _bare_skip_worktree(fc):
+    _out("-C", str(fc.topic), "update-index", "--skip-worktree", "Hello.txt")
+    return [fc.topic]
+
+
+def _bare_dotfile(fc):
+    (fc.top / ".envrc").write_text("export X=1\n")
+    return []
+
+
+def _bare_nested(fc):
+    path = fc.top / "x" / "b1"
+    gitdir = str(fc.top / ".git")
+    _out("--git-dir", gitdir, "worktree", "add", "-q", "-b", "b1", str(path))
+    return [path]
+
+
+@pytest.mark.parametrize(
+    "setup", [_bare_sparse, _bare_skip_worktree, _bare_dotfile, _bare_nested]
+)
+def test_worktree_migrate_bare_at_root_allows(
+    bare_at_root_clone, script_runner, setup
+):
+    fc = bare_at_root_clone
+    extra = setup(fc)
+
+    result = _migrate(script_runner, fc.top, "--apply")
+
+    assert result.success, result.stdout + result.stderr
+    for path in {fc.master, fc.topic, *extra}:
+        assert _out("-C", str(path), "status", "--porcelain") == ""
+        assert _out(
+            "-C", str(path), "rev-parse", "--git-common-dir"
+        ).strip() == str(fc.store)
