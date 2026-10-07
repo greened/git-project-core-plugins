@@ -30,6 +30,12 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Changed
+.......
+- A ``worktree migrate --apply`` failure prints the reason as well as the
+  step. When ``verify`` finds a worktree that is not clean, it names up to
+  10 of the changed or untracked paths. Like the precheck, it ignores
+  ``status.showUntrackedFiles`` and ``submodule.<name>.ignore``.
 
 `0.0.29`_ - 2026-10-06
 ----------------------

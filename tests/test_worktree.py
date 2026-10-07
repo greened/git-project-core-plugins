@@ -35,6 +35,7 @@ import pygit2
 import pytest
 
 from git_project_core_plugins import Worktree, WorktreePlugin
+from git_project_core_plugins.worktree import _status_paths
 
 
 def test_worktree_add_arguments(
@@ -1689,3 +1690,45 @@ def test_worktree_migrate_stops_on_failure(
     assert _snapshot(fc, internals=False) == before
     assert _out("-C", str(top), "status", "--porcelain") == ""
     assert not os.path.lexists(fc.store)
+
+
+@pytest.mark.parametrize(
+    "status, paths",
+    [
+        ("?? a\0", ["a"]),
+        ("R  new\0old\0", ["new"]),
+        (" R new\0old\0", ["new"]),
+        ("C  new\0old\0", ["new"]),
+        ("R  new\0Rold\0?? a\0", ["new", "a"]),
+    ],
+)
+def test_worktree_status_paths(status, paths):
+    assert _status_paths(status) == paths
+
+
+def test_worktree_migrate_verify_names_dirty_paths(
+    flat_clone, script_runner, monkeypatch
+):
+    from git_project_core_plugins import worktree as worktree_module
+
+    fc = flat_clone
+    real_verify = worktree_module._verify
+    names = [f"stray{i:02}" for i in range(12)]
+
+    # Dirty main after the precheck, as a stray editor file would.
+    def dirtying_verify(plan, worktrees):
+        for name in names:
+            (worktrees[0].new / name).write_text("stray\n")
+        return real_verify(plan, worktrees)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(worktree_module, "_verify", dirtying_verify)
+        result = _migrate(script_runner, fc.top, "--apply")
+
+    assert not result.success
+    assert "failed at step verify: verify failed: " in result.stdout
+    assert "is not clean: stray00, stray01" in result.stdout
+    assert "stray09 and 2 more" in result.stdout
+    assert "stray10" not in result.stdout
+    manifest = json.loads((fc.store / "git-project-migrate.json").read_text())
+    assert "stray00" in manifest["error"]

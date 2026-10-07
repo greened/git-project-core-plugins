@@ -450,6 +450,38 @@ def _migrate_dir_name(branch):
     return branch.replace("/", "-")
 
 
+def _status(path):
+    """Return the porcelain status of the worktree at path, or None when git
+    fails. The precheck and verify share it, so both agree on clean.
+
+    """
+    return _git_or_none(
+        "-C",
+        str(path),
+        "--no-optional-locks",
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    )
+
+
+def _status_paths(status):
+    """Return the paths in ``git status --porcelain=v1 -z`` output."""
+    paths = []
+    entries = iter(status.split("\0"))
+    for entry in entries:
+        if not entry:
+            continue
+        paths.append(entry[3:])
+        # A rename or copy, in the index or the worktree, is followed by its
+        # source path.
+        if "R" in entry[:2] or "C" in entry[:2]:
+            next(entries, None)
+    return paths
+
+
 def _check_worktree(plan, path, record, top):
     """Add a refusal for each reason the worktree at path cannot move."""
     refusals = plan.refusals
@@ -463,16 +495,7 @@ def _check_worktree(plan, path, record, top):
     if "branch" not in record:
         refusals.append(f"{path} has a detached HEAD")
 
-    status = _git_or_none(
-        "-C",
-        str(path),
-        "--no-optional-locks",
-        "status",
-        "--porcelain=v1",
-        "-z",
-        "--untracked-files=all",
-        "--ignore-submodules=none",
-    )
+    status = _status(path)
     if status is None:
         refusals.append(f"{path}: cannot read git status")
     elif status:
@@ -872,6 +895,9 @@ def _worktree_record(worktree):
     }
 
 
+_DIRTY_PATHS_SHOWN = 10
+
+
 def _verify(plan, worktrees):
     """Raise GitProjectError unless the migrated layout matches the plan."""
     store = str(plan.store_new)
@@ -897,11 +923,15 @@ def _verify(plan, worktrees):
         problems.append("the worktree list does not match the plan")
 
     for worktree in worktrees:
-        status = _git_or_none(
-            "-C", str(worktree.new), "status", "--porcelain", "-z"
-        )
-        if status is None or status:
-            problems.append(f"{worktree.new} is not clean")
+        status = _status(worktree.new)
+        if status is None:
+            problems.append(f"{worktree.new}: cannot read git status")
+        elif status:
+            paths = _status_paths(status)
+            shown = ", ".join(paths[:_DIRTY_PATHS_SHOWN])
+            if len(paths) > _DIRTY_PATHS_SHOWN:
+                shown += f" and {len(paths) - _DIRTY_PATHS_SHOWN} more"
+            problems.append(f"{worktree.new} is not clean: {shown}")
 
     refs = sorted(
         _git("--git-dir", store, "for-each-ref", _REFS_FORMAT).splitlines()
@@ -1092,8 +1122,10 @@ def _apply(plan, main, git, project):
         except OSError:
             pass
         steps = ", ".join(manifest["steps_done"]) or "none"
+        reason = f": {exception}" if str(exception) else ""
         message = (
-            f"worktree migrate failed at step {step}. Steps done: {steps}. "
+            f"worktree migrate failed at step {step}{reason}. "
+            f"Steps done: {steps}. "
             f"The manifest is {manifest_path}. To undo the steps done, see "
             "Manual rollback in the worktree help."
         )
@@ -1292,8 +1324,10 @@ class WorktreePlugin(Plugin):
     migration stops at the first failure and names the step in
     ``failed_step``. A hard stop, such as a kill, leaves no
     ``failed_step``, so read ``current_step``. The error names the
-    manifest. After a stop in ``rename_store`` it is at either
-    <top>/.git or <store_new>.
+    failed step, its reason and the manifest. After a stop in
+    ``rename_store`` the manifest is at either <top>/.git or <store_new>.
+    When ``verify`` finds a worktree that is not clean, it names the first
+    10 changed or untracked paths and counts the rest.
 
     Manual rollback. Undo the steps that ``steps_done`` lists, in the order
     below. The failed step, or the current step after a hard stop, may be
