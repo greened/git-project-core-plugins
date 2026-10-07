@@ -30,6 +30,12 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+Changed
+.......
+- core-plugins now needs git-project 0.0.43 or later. With it,
+  ``worktree rm`` and ``branch prune`` delete the remote branch on a
+  remote whose URL names a host alias from ``~/.ssh/config``. The delete
+  runs the ``pre-push`` hook.
 
 `0.0.30`_ - 2026-10-07
 ----------------------

@@ -36,6 +36,14 @@ from git_project_core_plugins.worktree import get_hidden_gitdir_name
 pytest_plugins = ["git_project.test_support"]
 
 
+@pytest.fixture(autouse=True)
+def no_user_git_config(monkeypatch):
+    # A remote delete runs git push, which would run the user's global
+    # pre-push hook.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+
 @pytest.fixture(scope="function")
 def worktree_parser_manager(request, git, gitproject, project, parser_manager):
     plugin = WorktreePlugin()
