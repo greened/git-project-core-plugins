@@ -30,6 +30,9 @@ ChangeLog
 =========
 `Unreleased`_
 -------------
+
+`0.0.32`_ - 2026-10-07
+----------------------
 Changed
 .......
 - The docs, help text and error messages call the worktree layout the
@@ -233,7 +236,8 @@ Fixed
   404. Issues named ``unknown/greened``, a leftover from hatch's project
   template, and Documentation misspelled the package name.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.31...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.32...HEAD
+.. _0.0.32: https://github.com/greened/git-project-core-plugins/compare/v0.0.31...v0.0.32
 .. _0.0.31: https://github.com/greened/git-project-core-plugins/compare/v0.0.30...v0.0.31
 .. _0.0.30: https://github.com/greened/git-project-core-plugins/compare/v0.0.29...v0.0.30
 .. _0.0.29: https://github.com/greened/git-project-core-plugins/compare/v0.0.28...v0.0.29
