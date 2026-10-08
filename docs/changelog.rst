@@ -34,6 +34,10 @@ Changed
 .......
 - The docs, help text and error messages call the worktree layout the
   umbrella layout, and its top-level directory the umbrella.
+- ``init --worktree`` on a repository already bare at ``<top>/.git``
+  renames it to the hidden name and writes the ``.git`` file, as it does
+  for a regular clone. It refuses a bare repository with any other name,
+  or one with linked worktrees, which ``worktree migrate`` converts.
 
 Fixed
 .....

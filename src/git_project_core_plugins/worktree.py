@@ -1756,8 +1756,10 @@ class WorktreePlugin(Plugin):
     ``worktree migrate`` instead.
 
     On a repository that is already bare, ``init --worktree`` deletes nothing.
-    It refuses to run while a branch other than the main one exists, because it
-    cannot know which remote each branch should go to.
+    The repository must be named ``.git`` and have no linked worktrees, and it
+    is renamed to the hidden name. It refuses to run while a branch other than
+    the main one exists, because it cannot know which remote each branch
+    should go to.
 
     ``worktree migrate`` converts a flat clone, one whose ``.git`` is a
     directory, to the umbrella layout. Every branch, ref, stash and config
@@ -2201,6 +2203,28 @@ class WorktreePlugin(Plugin):
                             f"Cannot initialize umbrella layout, no remote named {remote}"
                         ) from None
 
+                    if was_bare:
+                        # The parent of a store with any other name is not
+                        # its own, and would become the umbrella.
+                        gitdir = Path(p_git.get_gitdir())
+                        if gitdir.name != ".git":
+                            raise GitProjectError(
+                                f"Cannot initialize umbrella layout, {gitdir} is not named .git"
+                            )
+                        # The rename below would strand them.
+                        admin = gitdir / "worktrees"
+                        if admin.is_dir() and os.listdir(admin):
+                            raise GitProjectError(
+                                f"Cannot initialize umbrella layout, {gitdir} has linked worktrees, use worktree migrate"
+                            )
+                        newgitdir = gitdir.parent / get_hidden_gitdir_name(
+                            p_git.get_remote_url(remote)
+                        )
+                        if os.path.lexists(newgitdir):
+                            raise GitProjectError(
+                                f"Cannot initialize umbrella layout, {newgitdir} already exists"
+                            )
+
                     main = self._choose_main_branch(p_git)
 
                     # If it's not already, convert the current workarea to a bare repository.
@@ -2256,9 +2280,7 @@ class WorktreePlugin(Plugin):
                         p_git.validate_config()
 
                         # After the reinit, so discovery resolves the clone
-                        # the same way it did before. The already-bare path
-                        # below keeps its .git as the clone itself, so only
-                        # the renamed case gets a pointer.
+                        # the same way it did before.
                         write_umbrella_gitdir(workarea_root, newgitdir.name)
 
                     if was_bare:
@@ -2274,6 +2296,11 @@ class WorktreePlugin(Plugin):
                                 raise GitProjectError(
                                     "Non-main branches detected, please push and/or delete them and try again."
                                 )
+
+                        gitdir.rename(newgitdir)
+                        p_git.reinit(newgitdir)
+                        p_git.validate_config()
+                        write_umbrella_gitdir(workarea_root, newgitdir.name)
 
                         newmain = self._rewrite_bare_refspects(p_git)
                         assert newmain == main

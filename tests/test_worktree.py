@@ -40,7 +40,11 @@ import pytest
 from git_project.test_support.common import create_commit
 
 from git_project_core_plugins import Worktree, WorktreePlugin
-from git_project_core_plugins.worktree import _status_paths, get_umbrella_dir
+from git_project_core_plugins.worktree import (
+    _status_paths,
+    get_hidden_gitdir_name,
+    get_umbrella_dir,
+)
 
 
 def test_worktree_add_arguments(
@@ -302,6 +306,96 @@ def test_worktree_init(git, git_project_runner, tmp_path_factory):
     assert os.path.exists(workarea / "master")
 
     check_umbrella_gitdir(workarea, hidden)
+
+
+def _bare_clone(git, path):
+    """Bare-clone the fixture to path, keeping only master, since init
+    refuses a bare repository with other branches.
+
+    """
+    url = "file://" + git.get_gitdir()
+    clone = git_project.Git()
+    clone.clone(url, path=str(path), bare=True)
+    repo = pygit2.Repository(str(path))
+    for name in list(repo.branches.local):
+        if name != "master":
+            repo.branches.delete(name)
+    return url
+
+
+def test_worktree_init_bare(git, git_project_runner, tmp_path_factory):
+    top = tmp_path_factory.mktemp("bare-top")
+    url = _bare_clone(git, top / ".git")
+
+    os.chdir(top)
+    git_project_runner.chdir(top)
+
+    git_project_runner.run(".*", "", "init", "--worktree")
+
+    hidden = get_hidden_gitdir_name(url)
+
+    assert (top / hidden).is_dir()
+    assert os.path.exists(top / "master")
+
+    check_umbrella_gitdir(top, hidden)
+
+    common = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=top / "master",
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert Path(common) == top / hidden
+
+
+def test_worktree_init_bare_not_dot_git(
+    git, git_project_runner, tmp_path_factory
+):
+    top = tmp_path_factory.mktemp("bare-top")
+    store = top / "repo.git"
+    _bare_clone(git, store)
+
+    os.chdir(store)
+    git_project_runner.chdir(store)
+    git_project_runner.expect_fail = True
+
+    git_project_runner.run(
+        "git-project: Cannot initialize umbrella layout, .*repo.git is not "
+        "named .git",
+        "",
+        "init",
+        "--worktree",
+    )
+
+    assert sorted(os.listdir(top)) == ["repo.git"]
+
+
+def test_worktree_init_bare_linked_worktree(
+    git, git_project_runner, tmp_path_factory
+):
+    top = tmp_path_factory.mktemp("bare-top")
+    _bare_clone(git, top / ".git")
+    subprocess.run(
+        ["git", "worktree", "add", "-q", "--detach", str(top / "linked")],
+        cwd=top,
+        check=True,
+    )
+
+    os.chdir(top)
+    git_project_runner.chdir(top)
+    git_project_runner.expect_fail = True
+
+    git_project_runner.run(
+        "git-project: Cannot initialize umbrella layout, .* has linked "
+        "worktrees, use worktree migrate",
+        "",
+        "init",
+        "--worktree",
+    )
+
+    assert (top / ".git").is_dir()
+    assert sorted(os.listdir(top)) == [".git", "linked"]
 
 
 def test_worktree_init_nonclean(git, git_project_runner):
