@@ -43,6 +43,10 @@ Fixed
 - Run from the umbrella with no committish, ``worktree add`` could branch
   from the store's detached HEAD, which can fall behind. It now starts at
   the project branch.
+- ``worktree rm`` of a worktree that git-project did not create, such as
+  one made by plain ``git worktree add``, crashed and left a stray
+  ``worktreepath`` key in the config. It now fails with a message that
+  names the worktree and changes nothing.
 
 `0.0.31`_ - 2026-10-07
 ----------------------

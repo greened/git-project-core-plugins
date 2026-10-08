@@ -208,6 +208,12 @@ def command_worktree_add(git, gitproject, project, clargs):
 def command_worktree_rm(git, gitproject, project, clargs):
     """Implement git-project worktree rm."""
     name = clargs.name
+    # Getting a Worktree with no config writes a path entry for it, so check
+    # first.
+    if not Worktree.exists(
+        git, project.get_section(), Worktree.subsection(), name
+    ):
+        raise GitProjectError(f"git-project has no record of worktree {name}")
     worktree = Worktree.get(git, project, name)
 
     # The merge check protects the branch's commits, so it applies only when we

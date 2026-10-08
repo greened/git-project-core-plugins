@@ -672,6 +672,49 @@ def test_worktree_rm(git, git_project_runner, tmp_path_factory):
     assert not git.committish_exists("user/test_rm")
 
 
+def test_worktree_rm_unrecorded(git, git_project_runner, tmp_path_factory):
+    # A worktree made by plain git has no git-project config. rm must refuse
+    # it by name and must not write config for it.
+    workarea = git.get_working_copy_root()
+    path = workarea.parent / "user" / "test_rm_unrecorded"
+
+    subprocess.run(
+        [
+            "git",
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "test_rm_unrecorded",
+            str(path),
+        ],
+        cwd=workarea,
+        check=True,
+    )
+
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+    git_project_runner.expect_fail = True
+
+    git_project_runner.run(
+        "git-project has no record of worktree test_rm_unrecorded",
+        "",
+        "worktree",
+        "rm",
+        "test_rm_unrecorded",
+    )
+
+    assert path.exists()
+    config = subprocess.run(
+        ["git", "config", "--list"],
+        cwd=workarea,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert "test_rm_unrecorded" not in config
+
+
 def test_worktree_rm_unset_builddir(git, git_project_runner, tmp_path_factory):
     workarea = git.get_working_copy_root()
     os.chdir(workarea)
