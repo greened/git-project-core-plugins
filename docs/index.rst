@@ -35,6 +35,7 @@ Welcome to git-project-core-plugins' documentation!
 
    intro.rst
    commands.rst
+   contributing.rst
    authors.rst
    changelog.rst
    license.rst
