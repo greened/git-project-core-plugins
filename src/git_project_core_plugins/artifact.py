@@ -47,10 +47,7 @@ from git_project import (
     add_top_level_command,
 )
 
-from git_project_core_plugins.common import (
-    add_config_properties,
-    add_plugin_version_argument,
-)
+from git_project_core_plugins.common import add_plugin_version_argument
 
 
 def _protected_paths(git):
@@ -142,33 +139,21 @@ def remove_artifact_path(fullpath, git=None):
     _remove_paths(paths)
 
 
-def _read_artifact(git, project_section, artifact_ident):
-    """Return the Artifact at artifact_ident without writing the config."""
-    subsection, ident = Artifact._split_ident(artifact_ident)
-    add_config_properties(git, Artifact, project_section, subsection, ident)
-    artifact = Artifact.__new__(Artifact)
-    ConfigObject.__init__(artifact, git, project_section, subsection, ident)
-    return artifact
-
-
-def _find_artifact(git, project_section, subsection, ident, read_only):
+def _find_artifact(git, project_section, subsection, ident):
     """Return the Artifact for the config object at subsection.ident, or the
     general one for subsection, or None.
 
     """
     for artifact_ident in (subsection + "." + ident, subsection):
         if Artifact.exists(git, project_section, artifact_ident):
-            if read_only:
-                return _read_artifact(git, project_section, artifact_ident)
             return Artifact.get(git, project_section, artifact_ident)
     return None
 
 
-def artifact_removal_paths(git, project, config_object, read_only=False):
+def artifact_removal_paths(git, project, config_object):
     """Return the paths that removing config_object would remove through its
     artifacts. Raise GitProjectError when one is a protected path or contains
-    one. A caller can then refuse before it removes anything. With read_only,
-    the config is left as it was.
+    one. A caller can then refuse before it removes anything.
 
     """
     artifact = _find_artifact(
@@ -176,7 +161,6 @@ def artifact_removal_paths(git, project, config_object, read_only=False):
         config_object._project_section,
         config_object._subsection,
         config_object._ident,
-        read_only,
     )
     paths = []
     if artifact:

@@ -476,7 +476,7 @@ def _plan_worktree_rm(git, project, clargs):
     project.push_scope(worktree)
     try:
         for config_object in (worktree, worktree._pathsection):
-            artifact_removal_paths(git, project, config_object, read_only=True)
+            artifact_removal_paths(git, project, config_object)
     finally:
         project.pop_scope()
 

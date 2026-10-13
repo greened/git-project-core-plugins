@@ -46,8 +46,8 @@ def add_plugin_version_argument(parser):
 
 def add_config_properties(git, cls, project_section, subsection, ident):
     """Give cls a property for each key in the config section of
-    subsection.ident. ConfigObject.get adds them too, but it writes every
-    value back, which copies a global value into the local config.
+    subsection.ident, without constructing cls. Constructing a Worktree
+    writes its path record.
 
     """
     config_section = git.config.get_section(

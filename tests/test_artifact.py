@@ -441,7 +441,7 @@ def test_artifact_object_rm(reset_directory, git, project):
     assert not Artifact.exists(git, project.get_section(), "gone")
 
 
-def test_artifact_removal_paths_read_only_matches(
+def test_artifact_removal_paths_leaves_config(
     reset_directory, git, project, tmp_path, monkeypatch
 ):
     import subprocess
@@ -464,8 +464,7 @@ def test_artifact_removal_paths_read_only_matches(
     )
     # Setting itempath through Artifact.get would replace the global value
     # in the cached config, so add the local one behind its back. It names
-    # the global single valued extra, which Artifact.get would copy into the
-    # local config.
+    # the global single valued extra, which must not reach the local config.
     subprocess.run(
         [
             "git",
@@ -488,12 +487,9 @@ def test_artifact_removal_paths_read_only_matches(
         config = Path(git.get_git_common_dir()) / "config"
         before = config.read_bytes()
 
-        read_only = artifact_removal_paths(git, project, obj, read_only=True)
+        paths = artifact_removal_paths(git, project, obj)
         assert config.read_bytes() == before
-
-        writing = artifact_removal_paths(git, project, obj, read_only=False)
     finally:
         pygit2.settings.search_path[ConfigLevel.GLOBAL] = saved
 
-    assert sorted(read_only) == sorted([str(elsewhere), str(workdir / "temp")])
-    assert read_only == writing
+    assert sorted(paths) == sorted([str(elsewhere), str(workdir / "temp")])
