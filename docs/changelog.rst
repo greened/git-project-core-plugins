@@ -31,6 +31,36 @@ ChangeLog
 `Unreleased`_
 -------------
 
+`0.0.33`_ - 2026-10-13
+----------------------
+Added
+.....
+- New ``multirepo`` command, with aliases ``mr`` and ``multi``, that runs
+  ``worktree add``, ``worktree rm``, ``worktree config``, ``branch
+  status``, ``branch prune``, ``config`` or ``run`` in every repository of
+  a named set. A worktree set is created, checked and removed together.
+  New ``set`` command to list, edit and clone sets, which live in a file
+  named by ``<project>.set.file`` outside every member repository.
+
+Changed
+.......
+- core-plugins needs git-project 0.0.44 or later.
+- ``worktree add`` checks the path, branch and record before it changes
+  anything, and refuses with a clear message where it used to fail part
+  way or overwrite a stale record. An add that fails partway removes the
+  branch, worktree and record it made. ``worktree rm`` checks every
+  artifact path before it removes any. Both commands take a new
+  ``--check`` option that runs the checks alone, and a new ``--multirepo``
+  option that ties the worktree to a multirepo set.
+
+Fixed
+.....
+- ``rm run <name>`` failed when ``<name>`` was part of another run's name, as
+  ``build`` is of ``build-debug``. It now removes only the run with that exact
+  name.
+- ``help`` no longer writes the project's default ``branch`` and
+  ``remote`` to the config.
+
 `0.0.32`_ - 2026-10-07
 ----------------------
 Changed
@@ -236,7 +266,8 @@ Fixed
   404. Issues named ``unknown/greened``, a leftover from hatch's project
   template, and Documentation misspelled the package name.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.32...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.33...HEAD
+.. _0.0.33: https://github.com/greened/git-project-core-plugins/compare/v0.0.32...v0.0.33
 .. _0.0.32: https://github.com/greened/git-project-core-plugins/compare/v0.0.31...v0.0.32
 .. _0.0.31: https://github.com/greened/git-project-core-plugins/compare/v0.0.30...v0.0.31
 .. _0.0.30: https://github.com/greened/git-project-core-plugins/compare/v0.0.29...v0.0.30
