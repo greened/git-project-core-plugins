@@ -325,7 +325,9 @@ class RunPlugin(Plugin):
             run = alias_class.get(git, project, clargs.name)
             run.rm()
             print(f"Removing project {alias} {clargs.name}")
-            project.rm_item(alias, clargs.name)
+            # rm_item takes a regex, and an unanchored name would also
+            # match a longer name such as build-debug.
+            project.rm_item(alias, "^" + re.escape(clargs.name) + "$")
 
         rm_run_parser.set_defaults(func=command_rm_run)
 

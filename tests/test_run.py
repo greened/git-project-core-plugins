@@ -437,6 +437,26 @@ def test_run_rm(git_project_runner, git):
     git_project_runner.run(".*", ".*", "run", "gone")
 
 
+def test_run_rm_name_is_not_a_pattern(git_project_runner, git):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run(".*", "", "add", "run", "build", "echo build")
+    git_project_runner.run(".*", "", "add", "run", "build-debug", "echo debug")
+
+    git_project_runner.run(
+        "Removing project run build", "", "rm", "run", "build"
+    )
+
+    git.reload_config()
+    project = git_project.Project.get(git, "project")
+    assert list(project.iter_multival("run")) == ["build-debug"]
+    assert git_project.ConfigObject.exists(
+        git, "project", "run", "build-debug"
+    )
+
+
 def test_run_options_are_not_shell(git_project_runner, git):
     workdir = Path(git.get_working_copy_root())
 
