@@ -29,11 +29,13 @@ import shlex
 import shutil
 import signal
 import subprocess
+import sys
 import time
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pygit2
 from git_project import (
     ConfigObject,
     GitProjectError,
@@ -44,7 +46,15 @@ from git_project import (
     capture_command,
 )
 
-from git_project_core_plugins.common import add_plugin_version_argument
+from git_project_core_plugins.artifact import (
+    _remove_paths,
+    artifact_removal_paths,
+)
+from git_project_core_plugins.common import (
+    _GIT_REDIRECT_VARS,
+    add_config_properties,
+    add_plugin_version_argument,
+)
 
 
 def normalize_path(git, path):
@@ -117,13 +127,60 @@ def get_umbrella_dir(git):
     outside the umbrella layout. The umbrella is known by the .git file that write_umbrella_gitdir leaves beside the store.
 
     """
-    store = Path(git.get_git_common_dir()).resolve()
+    return umbrella_of_store(Path(git.get_git_common_dir()).resolve())
+
+
+def umbrella_of_store(store: Path):
+    """Return the umbrella that holds the resolved store, or None when the
+    store is not in the umbrella layout.
+
+    """
     gitfile = store.parent / ".git"
     if gitfile.is_file() and gitfile.read_text() == _umbrella_gitdir_text(
         store.name
     ):
         return store.parent
     return None
+
+
+def branch_name_for_path(path):
+    """Return the branch worktree add names after <name-or-path>: the last
+    component of an absolute path, and otherwise the part after any '..'.
+
+    """
+    branch = str(Path(path).name)
+    # If the path is not absolute, try creating a branch named as a subpath,
+    # starting either from the top or after the last .. component.
+    namepath = Path(path)
+    if not namepath.is_absolute():
+        parts = namepath.parts
+        for i, v in enumerate(reversed(parts)):
+            if v == "..":
+                oi = len(parts) - i - 1
+                namepath = Path(parts[oi + 1])
+                for j in range(oi + 2, len(parts)):
+                    namepath = namepath.joinpath(parts[j])
+                break
+        branch = str(namepath)
+    return branch
+
+
+def default_branch_point(git, project_section):
+    """Return the refname worktree add branches from when it is given no
+    committish: HEAD's, or from the umbrella, the project branch's if there
+    is one.
+
+    """
+    refname = git.committish_to_refname("HEAD")
+    if git.is_bare_repository() and get_umbrella_dir(git) is not None:
+        # The store's HEAD can stay detached where the layout was made,
+        # behind the project branch.
+        main = _find_main_branch(
+            git, project_section, ["--git-dir", git.get_git_common_dir()]
+        )
+        if main is not None:
+            refname = git.branch_name_to_refname(main)
+    return refname
 
 
 # Determine a path and committish from args.
@@ -140,43 +197,34 @@ def get_name_branch_path_and_refname(git, project, clargs):
         raise GitProjectError("worktree add requires a path")
 
     name = str(Path(clargs.path).name)
-    branch = name
-    # If the path is not absolute, try creating a branch named as a subpath,
-    # starting either from the top or after the last .. component.
-    namepath = Path(clargs.path)
-    if not namepath.is_absolute():
-        parts = namepath.parts
-        for i, v in enumerate(reversed(parts)):
-            if v == "..":
-                oi = len(parts) - i - 1
-                namepath = Path(parts[oi + 1])
-                for j in range(oi + 2, len(parts)):
-                    namepath = namepath.joinpath(parts[j])
-                break
-        branch = str(namepath)
+    branch = branch_name_for_path(clargs.path)
     path = normalize_path(git, clargs.path)
-    refname = git.committish_to_refname("HEAD")
     if hasattr(clargs, "committish") and clargs.committish:
         # A committish may resolve to a commit with no ref (bare SHA);
         # committish_to_refname would fail there, so fall back to the
         # committish itself and let create_branch branch at that commit.
         ref = git.committish_to_ref(clargs.committish)
         refname = ref.name if ref is not None else clargs.committish
-    elif git.is_bare_repository() and get_umbrella_dir(git) is not None:
-        # The store's HEAD can stay detached where the layout was made,
-        # behind the project branch.
-        main = _find_main_branch(
-            git, project.get_section(), ["--git-dir", git.get_git_common_dir()]
-        )
-        if main is not None:
-            refname = git.branch_name_to_refname(main)
+    else:
+        refname = default_branch_point(git, project.get_section())
 
     return name, branch, path, refname
 
 
-# worktree add
-def command_worktree_add(git, gitproject, project, clargs):
-    """Implement git-project worktree add."""
+@dataclass
+class _AddPlan:
+    name: str
+    path: str
+    branch: str
+    branch_point: str
+    create_branch: bool
+
+
+def _plan_worktree_add(git, project, clargs):
+    """Work out what worktree add will do, changing nothing. Raise
+    GitProjectError for each reason the add would fail that can be seen now.
+
+    """
     name, newbranch, path, refname = get_name_branch_path_and_refname(
         git, project, clargs
     )
@@ -191,37 +239,231 @@ def command_worktree_add(git, gitproject, project, clargs):
 
     # Either use the branch the user gave us or create a branch (if needed)
     # named after the given name.
-    if hasattr(clargs, "branch") and clargs.branch:
+    create_branch = False
+    if getattr(clargs, "branch", None):
         branch = clargs.branch
-        git.create_branch(branch, branch_point)
+        create_branch = True
+        if git.committish_exists(git.branch_name_to_refname(branch)):
+            raise GitProjectError(f"Branch {branch} already exists")
     elif newbranch != branch:
         branch = newbranch
-        if not git.committish_exists(branch):
-            git.create_branch(branch, branch_point)
+        create_branch = not git.committish_exists(branch)
 
-    worktree = Worktree.get(git, project, name, path=path, committish=branch)
-    worktree.add()
+    if create_branch and not pygit2.reference_is_valid_name(
+        git.branch_name_to_refname(branch)
+    ):
+        raise GitProjectError(f"{branch} is not a valid branch name")
+
+    if os.path.lexists(path):
+        raise GitProjectError(f"Worktree path {path} already exists")
+
+    if Worktree.exists(
+        git, project.get_section(), Worktree.subsection(), name
+    ):
+        raise GitProjectError(f"git-project already has a worktree {name}")
+
+    # Worktree.get would merge into it, and a failed add would then remove
+    # its keys.
+    if Worktree.Path.exists(
+        git, project.get_section(), Worktree.Path.subsection(), path
+    ):
+        raise GitProjectError(f"git-project already has a record of {path}")
+
+    common_dir = git.get_git_common_dir()
+    if os.path.lexists(Path(common_dir) / "worktrees" / name):
+        raise GitProjectError(f"git already has a worktree {name}")
+
+    if not create_branch:
+        # libgit2 will not check out a branch that another worktree has.
+        local = pygit2.Repository(common_dir).branches.local.get(branch)
+        if local is not None and local.is_checked_out():
+            raise GitProjectError(f"Branch {branch} is already checked out")
+
+    return _AddPlan(name, path, branch, branch_point, create_branch)
+
+
+def _rm_config_section(git, section):
+    """Remove every key in section, without the artifact hook on rm."""
+    config_section = git.config.get_section(section)
+    if config_section is None:
+        return
+    for itemname, _item in list(config_section):
+        git.config.rm_items(section, itemname.rsplit(".", 1)[-1])
+
+
+def _undo_worktree_add(git, project, plan, worktree_added):
+    """Remove what a failed add made, so no record is left without its
+    worktree. Report, rather than raise, what cannot be removed, so the
+    caller's error is the one the user sees.
+
+    """
+    steps = []
+    if worktree_added:
+        section = project.get_section()
+        steps += [
+            (
+                f"the record of worktree {plan.name}",
+                lambda: _rm_config_section(
+                    git, f"{section}.{Worktree.subsection()}.{plan.name}"
+                ),
+            ),
+            (
+                f"the path record for {plan.path}",
+                lambda: _rm_config_section(
+                    git, f"{section}.{Worktree.Path.subsection()}.{plan.path}"
+                ),
+            ),
+            (
+                f"worktree {plan.path}",
+                lambda: shutil.rmtree(plan.path, ignore_errors=True),
+            ),
+        ]
+
+    def prune():
+        # libgit2 can leave its record of the worktree behind when the add
+        # fails, and that record holds the branch checked out.
+        repo = pygit2.Repository(git.get_git_common_dir())
+        if plan.name in repo.list_worktrees():
+            repo.lookup_worktree(plan.name).prune(True)
+
+    steps.append((f"git's record of worktree {plan.name}", prune))
+    if plan.create_branch:
+        steps.append(
+            (
+                f"branch {plan.branch}",
+                lambda: git.delete_branch(plan.branch),
+            )
+        )
+
+    for what, step in steps:
+        try:
+            step()
+        except Exception as exception:
+            print(
+                f"warning: could not remove {what}: {exception}",
+                file=sys.stderr,
+            )
+
+
+def _apply_worktree_add(git, project, plan, multirepo=None):
+    """Make the worktree that plan describes. Create the branch, then the
+    worktree, then the record, and undo the earlier steps when a later one
+    fails.
+
+    """
+    if plan.create_branch:
+        git.create_branch(plan.branch, plan.branch_point)
+
+    path_was_free = not os.path.lexists(plan.path)
+    try:
+        git.add_worktree(plan.name, plan.path, plan.branch)
+    # A Ctrl-C raises KeyboardInterrupt, so undo on that too.
+    except BaseException:
+        # Only a directory this add made, never one that was already there.
+        if (
+            path_was_free
+            and os.path.isdir(plan.path)
+            and not os.path.islink(plan.path)
+        ):
+            shutil.rmtree(plan.path, ignore_errors=True)
+        _undo_worktree_add(git, project, plan, worktree_added=False)
+        raise
+
+    record = {"path": plan.path, "committish": plan.branch}
+    if plan.create_branch:
+        record["branchcreated"] = "true"
+    if multirepo is not None:
+        record["multirepo"] = multirepo
+
+    try:
+        worktree = Worktree.get(git, project, plan.name, **record)
+    except BaseException:
+        _undo_worktree_add(git, project, plan, worktree_added=True)
+        raise
 
     return worktree
 
 
-def command_worktree_rm(git, gitproject, project, clargs):
-    """Implement git-project worktree rm."""
+# worktree add
+def command_worktree_add(git, gitproject, project, clargs):
+    """Implement git-project worktree add."""
+    plan = _plan_worktree_add(git, project, clargs)
+
+    if getattr(clargs, "check", False):
+        print(
+            f"Would add worktree {plan.name} at {plan.path} on branch "
+            f"{plan.branch}"
+        )
+        return None
+
+    return _apply_worktree_add(
+        git, project, plan, getattr(clargs, "multirepo", None)
+    )
+
+
+def _record_values(git, worktree, key):
+    # The repository's own config, since git.config also holds the global
+    # one, where a stray key would pass for the record's.
+    config = pygit2.Config(str(Path(git.get_git_common_dir()) / "config"))
+    return list(
+        config.snapshot().get_multivar(f"{worktree.get_section()}.{key}")
+    )
+
+
+def _read_worktree(git, project, name):
+    """Return the Worktree for record name, and its path record, without
+    writing the config. Worktree.get writes every value back, and writes the
+    path record even when it was removed.
+
+    """
+    section = project.get_section()
+    add_config_properties(git, Worktree, section, Worktree.subsection(), name)
+    worktree = Worktree.__new__(Worktree)
+    ScopedConfigObject.__init__(
+        worktree, git, section, Worktree.subsection(), name
+    )
+    worktree._pathsection = Worktree.Path(
+        git, section, Worktree.Path.subsection(), worktree.path
+    )
+    return worktree
+
+
+def _plan_worktree_rm(git, project, clargs):
+    """Check that worktree rm can go ahead, changing nothing. Return whether
+    the worktree's branch stays.
+
+    """
     name = clargs.name
-    # Getting a Worktree with no config writes a path entry for it, so check
-    # first.
     if not Worktree.exists(
         git, project.get_section(), Worktree.subsection(), name
     ):
         raise GitProjectError(f"git-project has no record of worktree {name}")
-    worktree = Worktree.get(git, project, name)
+    worktree = _read_worktree(git, project, name)
+
+    keep_branch = clargs.keep_branch
+    multirepo = getattr(clargs, "multirepo", None)
+    if multirepo is not None:
+        # The record, not the scope chain, so a project value cannot stand in.
+        if _record_values(git, worktree, "multirepo") != [multirepo]:
+            raise GitProjectError(
+                f"Worktree {name} was not added for multirepo set {multirepo}"
+            )
+        # A branch that existed before the add belongs to someone else.
+        created = _record_values(git, worktree, "branchcreated")
+        if not created:
+            keep_branch = True
+        elif created != ["true"]:
+            raise GitProjectError(
+                f"Worktree {name} has branchcreated set to "
+                f"{', '.join(created)}, not true"
+            )
 
     # The merge check protects the branch's commits, so it applies only when we
     # are going to delete the branch.  --keep-branch leaves the branch in place
     # both locally and on remotes, so the merge state cannot cost anything.
     # --keep-remote-branch still deletes the local branch, so it still applies.
     if (
-        not clargs.keep_branch
+        not keep_branch
         and not project.branch_is_merged(worktree.committish)
         and not clargs.force
     ):
@@ -229,8 +471,28 @@ def command_worktree_rm(git, gitproject, project, clargs):
             f"Worktree branch {worktree.committish} is not merged, use -f to force"
         )
 
-    worktree.rm(
-        keep_branch=clargs.keep_branch,
+    # Worktree.rm removes the artifact paths of both config sections.
+    # Substitution reads the worktree's values through the project.
+    project.push_scope(worktree)
+    try:
+        for config_object in (worktree, worktree._pathsection):
+            artifact_removal_paths(git, project, config_object, read_only=True)
+    finally:
+        project.pop_scope()
+
+    return keep_branch
+
+
+def command_worktree_rm(git, gitproject, project, clargs):
+    """Implement git-project worktree rm."""
+    keep_branch = _plan_worktree_rm(git, project, clargs)
+
+    if getattr(clargs, "check", False):
+        print(f"Would remove worktree {clargs.name}")
+        return
+
+    Worktree.get(git, project, clargs.name).rm(
+        keep_branch=keep_branch,
         keep_remote_branch=clargs.keep_remote_branch,
     )
 
@@ -368,10 +630,24 @@ class Worktree(ScopedConfigObject):
         ident = self.get_ident()
         committish = self.committish
 
-        # Remove the config section first. An artifact hook on rm may refuse a
-        # path, and it must do so before the workarea or branch is gone.
-        super().rm()
-        self._pathsection.rm()
+        # Expand the artifact paths of both sections while the worktree's keys
+        # are still there to substitute, and refuse a protected one before
+        # anything is gone. The artifact hook on rm would expand the path
+        # record's after the worktree's keys were removed.
+        project = Project.get(
+            self._git, self._project_section, set_defaults=False
+        )
+        project.push_scope(self)
+        artifact_paths = [
+            path
+            for config_object in (self, self._pathsection)
+            for path in artifact_removal_paths(
+                self._git, project, config_object
+            )
+        ]
+        for config_object in (self, self._pathsection):
+            _rm_config_section(self._git, config_object.get_section())
+        _remove_paths(artifact_paths)
 
         # Remove each tree on its own, so one that is missing or unset does not
         # leave the rest behind.
@@ -400,20 +676,6 @@ class Worktree(ScopedConfigObject):
 # worktree migrate
 
 _MIGRATE_MANIFEST = "git-project-migrate.json"
-
-# Each of these points git somewhere other than the clone being migrated.
-_GIT_REDIRECT_VARS = (
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_INDEX_FILE",
-    "GIT_COMMON_DIR",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_CONFIG",
-    "GIT_CONFIG_PARAMETERS",
-    "GIT_CONFIG_COUNT",
-    "GIT_NAMESPACE",
-)
 
 # Files and directories git leaves in a gitdir while an operation is under
 # way. Moving a worktree in that state can strand the operation.
@@ -1641,15 +1903,32 @@ def command_worktree_migrate(git, gitproject, project, clargs):
     return 0
 
 
+class _CheckAction(argparse.Action):
+    """Set --check, and keep main from writing the project defaults, which
+    would make a check change the config.
+
+    """
+
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(
+            option_strings, dest, nargs=0, default=False, **kwargs
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, True)
+        namespace.write_project_defaults = False
+
+
 class WorktreePlugin(Plugin):
     """
     The worktree command manages worktrees and connects them to projects.
 
     Summary::
 
-      git <project> worktree add [-b <branch>] <name-or-path> [<committish>]
+      git <project> worktree add [-b <branch>] [--check] [--multirepo <set>]
+                                 <name-or-path> [<committish>]
       git <project> worktree rm [-f] [--keep-branch] [--keep-remote-branch]
-                                <name>
+                                [--check] [--multirepo <set>] <name>
       git <project> worktree config <ident> [--add] [--unset] <name> [<value>]
       git <project> worktree migrate [--apply]
 
@@ -1672,6 +1951,14 @@ class WorktreePlugin(Plugin):
     plain clone, puts the new worktree beside it, and ``worktree add topic``
     puts it inside.
 
+    ``worktree add`` refuses, before it changes anything, when the path
+    exists, when git or git-project already has a worktree of that name, when
+    the branch it would create exists or is not a valid name, and when the
+    branch it would check out is checked out in another worktree. It creates
+    the branch, then the worktree, then the worktree's record. When a step
+    fails it removes what the earlier steps made. The record gets
+    ``branchcreated = true`` when the add created the branch.
+
     To keep things simple, we'll usually always name worktrees similarly (or
     identically) to the branches they reference, though it is not strictly
     necessary to do so.
@@ -1684,6 +1971,14 @@ class WorktreePlugin(Plugin):
     local copy.  A branch the project configures is never deleted, whatever the
     flags say.  Removing a worktree whose branch is unmerged requires ``-f``,
     unless ``--keep-branch`` means the branch survives anyway.
+
+    With ``--check``, ``worktree add`` and ``worktree rm`` make the checks
+    they would make before changing anything, report the result and change
+    nothing. ``--multirepo <set>`` ties the worktree to multirepo set <set>.
+    ``worktree add`` writes ``multirepo = <set>`` into the new worktree's
+    record. ``worktree rm`` then refuses a worktree whose record does not
+    name <set>, and keeps the branch unless the record has ``branchcreated =
+    true``. It refuses a record whose ``branchcreated`` is anything else.
 
     The key idea behind project worktrees is that they are connected to various
     ``artifacts``.  Worktrees are managed together with these artifacts to
@@ -1995,6 +2290,16 @@ class WorktreePlugin(Plugin):
             metavar="BRANCH",
             help="Create BRANCH for the worktree",
         )
+        worktree_add_parser.add_argument(
+            "--check",
+            action=_CheckAction,
+            help="Check that the add can go ahead, changing nothing",
+        )
+        worktree_add_parser.add_argument(
+            "--multirepo",
+            metavar="SET",
+            help="Record that the worktree belongs to multirepo set SET",
+        )
 
         # worktree rm
         worktree_rm_parser = parser_manager.add_parser(
@@ -2019,6 +2324,16 @@ class WorktreePlugin(Plugin):
             "--keep-remote-branch",
             action="store_true",
             help="Keep the branch on remotes, deleting only the local copy",
+        )
+        worktree_rm_parser.add_argument(
+            "--check",
+            action=_CheckAction,
+            help="Check that the removal can go ahead, changing nothing",
+        )
+        worktree_rm_parser.add_argument(
+            "--multirepo",
+            metavar="SET",
+            help="Refuse unless the worktree was added for multirepo set SET",
         )
 
         # worktree migrate

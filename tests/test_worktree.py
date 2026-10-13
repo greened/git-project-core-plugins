@@ -42,6 +42,8 @@ from git_project.test_support.common import create_commit
 from git_project_core_plugins import Worktree, WorktreePlugin
 from git_project_core_plugins.worktree import (
     _status_paths,
+    command_worktree_add,
+    command_worktree_rm,
     get_hidden_gitdir_name,
     get_umbrella_dir,
 )
@@ -2885,3 +2887,351 @@ def test_worktree_migrate_bare_at_root_allows(
         assert _out(
             "-C", str(path), "rev-parse", "--git-common-dir"
         ).strip() == str(fc.store)
+
+
+# worktree add and rm, plan and apply
+
+
+def _add_clargs(path, **kwargs):
+    clargs = {
+        "path": path,
+        "committish": None,
+        "branch": None,
+        "check": False,
+        "multirepo": None,
+    }
+    clargs.update(kwargs)
+    return common.AttrDict(clargs)
+
+
+def _rm_clargs(name, **kwargs):
+    clargs = {
+        "name": name,
+        "force": False,
+        "keep_branch": False,
+        "keep_remote_branch": False,
+        "check": False,
+        "multirepo": None,
+    }
+    clargs.update(kwargs)
+    return common.AttrDict(clargs)
+
+
+def _repo_state(git):
+    """Return the refs, the config file, git's worktrees and the files beside
+    the clone, which an add or rm that refuses must leave alone.
+
+    """
+    common_dir = Path(git.get_git_common_dir())
+    repo = pygit2.Repository(str(common_dir))
+    refs = sorted(
+        (name, str(repo.references[name].target)) for name in repo.references
+    )
+    return (
+        refs,
+        (common_dir / "config").read_text(),
+        sorted(repo.list_worktrees()),
+        sorted(os.listdir(_base())),
+    )
+
+
+def _base():
+    """Return the directory that a path of ../<name> lands in."""
+    # The git fixture stands in the clone's git directory.
+    return Path.cwd().resolve().parent
+
+
+def _record(git, name):
+    """Return the worktree record on disk, as key -> list of values."""
+    config = pygit2.Config(str(Path(git.get_git_common_dir()) / "config"))
+    prefix = f"project.worktree.{name}."
+    record: dict[str, list[str]] = {}
+    for entry in config:
+        if entry.name.startswith(prefix):
+            key = entry.name[len(prefix) :]
+            record.setdefault(key, []).append(entry.value)
+    return record
+
+
+def _add_branch_exists(git, workarea):
+    return _add_clargs("../wt-b", committish="master", branch="pushed")
+
+
+def _add_path_exists(git, workarea):
+    (workarea / "wt-p").mkdir()
+    return _add_clargs("../wt-p", committish="master")
+
+
+def _add_record_exists(git, workarea):
+    git.config.set_item("project.worktree.wt-r", "path", "/nowhere")
+    return _add_clargs("../wt-r", committish="master")
+
+
+def _add_path_record_exists(git, workarea):
+    # A path record left behind by a worktree of another name.
+    git.config.set_item(
+        f"project.worktreepath.{workarea / 'wt-q'}", "worktree", "old"
+    )
+    return _add_clargs("../wt-q", committish="master")
+
+
+def _add_admin_exists(git, workarea):
+    (Path(git.get_git_common_dir()) / "worktrees" / "wt-a").mkdir(parents=True)
+    return _add_clargs("../wt-a", committish="master")
+
+
+def _add_checked_out(git, workarea):
+    # The main worktree has master checked out.
+    return _add_clargs("../master", committish="master")
+
+
+def _add_invalid_branch(git, workarea):
+    return _add_clargs("../bad..name", committish="master")
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        _add_branch_exists,
+        _add_path_exists,
+        _add_record_exists,
+        _add_path_record_exists,
+        _add_admin_exists,
+        _add_checked_out,
+        _add_invalid_branch,
+    ],
+)
+def test_worktree_add_check_matches_apply(git, gitproject, project, setup):
+    workarea = _base()
+    clargs = setup(git, workarea)
+    before = _repo_state(git)
+
+    clargs.check = True
+    with pytest.raises(git_project.GitProjectError) as check_error:
+        command_worktree_add(git, gitproject, project, clargs)
+    assert _repo_state(git) == before
+
+    clargs.check = False
+    with pytest.raises(git_project.GitProjectError) as apply_error:
+        command_worktree_add(git, gitproject, project, clargs)
+    assert _repo_state(git) == before
+    assert apply_error.value.message == check_error.value.message
+
+
+def test_worktree_add_check_changes_nothing(git, gitproject, project):
+    before = _repo_state(git)
+
+    command_worktree_add(
+        git,
+        gitproject,
+        project,
+        _add_clargs("../wt-check", committish="master", check=True),
+    )
+
+    assert _repo_state(git) == before
+
+
+def test_worktree_add_records_created_branch_and_set(git, gitproject, project):
+    workarea = _base()
+
+    command_worktree_add(
+        git,
+        gitproject,
+        project,
+        _add_clargs("../wt-new", committish="master", multirepo="tools"),
+    )
+
+    assert git.committish_exists("refs/heads/wt-new")
+    assert (workarea / "wt-new").is_dir()
+    record = _record(git, "wt-new")
+    assert record["branchcreated"] == ["true"]
+    assert record["multirepo"] == ["tools"]
+
+
+def test_worktree_add_reused_branch_is_not_recorded_as_created(
+    git, gitproject, project
+):
+    command_worktree_add(
+        git, gitproject, project, _add_clargs("../pushed", committish="master")
+    )
+
+    record = _record(git, "pushed")
+    assert record["committish"] == ["pushed"]
+    assert "branchcreated" not in record
+
+
+@pytest.mark.parametrize("error", [RuntimeError, KeyboardInterrupt])
+@pytest.mark.parametrize("makes_path", [False, True])
+def test_worktree_add_failure_after_branch_leaves_nothing(
+    git, gitproject, project, monkeypatch, error, makes_path
+):
+    workarea = _base()
+    before = _repo_state(git)
+
+    def fail(name, path, committish):
+        if makes_path:
+            Path(path, "partial").mkdir(parents=True)
+        raise error("add_worktree failed")
+
+    monkeypatch.setattr(git, "add_worktree", fail)
+
+    with pytest.raises(error):
+        command_worktree_add(
+            git,
+            gitproject,
+            project,
+            _add_clargs("../wt-f", committish="master"),
+        )
+
+    assert not git.committish_exists("refs/heads/wt-f")
+    assert _record(git, "wt-f") == {}
+    assert not (workarea / "wt-f").exists()
+    assert _repo_state(git) == before
+
+
+@pytest.mark.parametrize("error", [RuntimeError, KeyboardInterrupt])
+def test_worktree_add_record_failure_removes_worktree(
+    git, gitproject, project, monkeypatch, error
+):
+    workarea = _base()
+    before = _repo_state(git)
+
+    # The worktree record is written by then, and its path record is not.
+    def fail(cls, *args, **kwargs):
+        raise error("record write failed")
+
+    monkeypatch.setattr(Worktree.Path, "get", classmethod(fail))
+
+    with pytest.raises(error):
+        command_worktree_add(
+            git,
+            gitproject,
+            project,
+            _add_clargs("../wt-w", committish="master"),
+        )
+
+    monkeypatch.undo()
+    assert not git.committish_exists("refs/heads/wt-w")
+    assert _record(git, "wt-w") == {}
+    assert not (workarea / "wt-w").exists()
+    repo = pygit2.Repository(git.get_git_common_dir())
+    assert "wt-w" not in repo.list_worktrees()
+    assert _repo_state(git) == before
+
+
+def _add(git, gitproject, project, path, **kwargs):
+    kwargs.setdefault("committish", "master")
+    command_worktree_add(git, gitproject, project, _add_clargs(path, **kwargs))
+
+
+def _rm_no_record(git, gitproject, project, workarea):
+    return _rm_clargs("wt-none")
+
+
+def _rm_other_set(git, gitproject, project, workarea):
+    _add(git, gitproject, project, "../wt-s", multirepo="tools")
+    return _rm_clargs("wt-s", multirepo="other")
+
+
+def _rm_not_in_a_set(git, gitproject, project, workarea):
+    # A worktree of the same name made outside any set.
+    _add(git, gitproject, project, "../wt-n")
+    return _rm_clargs("wt-n", multirepo="tools")
+
+
+def _rm_branchcreated_false(git, gitproject, project, workarea):
+    _add(git, gitproject, project, "../wt-c", multirepo="tools")
+    git.config.set_item("project.worktree.wt-c", "branchcreated", "false")
+    return _rm_clargs("wt-c", multirepo="tools")
+
+
+def _rm_unmerged(git, gitproject, project, workarea):
+    _add(git, gitproject, project, "../wt-u", committish="unmerged")
+    return _rm_clargs("wt-u")
+
+
+def _rm_protected_artifact(git, gitproject, project, workarea):
+    _add(git, gitproject, project, "../wt-art")
+    git.config.add_item(
+        "project.artifact.worktree.wt-art",
+        "itempath",
+        git.get_git_common_dir(),
+    )
+    return _rm_clargs("wt-art")
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        _rm_no_record,
+        _rm_other_set,
+        _rm_not_in_a_set,
+        _rm_branchcreated_false,
+        _rm_unmerged,
+        _rm_protected_artifact,
+    ],
+)
+def test_worktree_rm_check_matches_apply(
+    git, gitproject, project, monkeypatch, tmp_path, setup
+):
+    # Nothing here should reach the home directory, but keep it out of reach.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    workarea = _base()
+    clargs = setup(git, gitproject, project, workarea)
+    before = _repo_state(git)
+
+    clargs.check = True
+    with pytest.raises(git_project.GitProjectError) as check_error:
+        command_worktree_rm(git, gitproject, project, clargs)
+    assert _repo_state(git) == before
+
+    clargs.check = False
+    with pytest.raises(git_project.GitProjectError) as apply_error:
+        command_worktree_rm(git, gitproject, project, clargs)
+    assert _repo_state(git) == before
+    assert apply_error.value.message == check_error.value.message
+
+
+def test_worktree_rm_multirepo_keeps_a_branch_it_did_not_create(
+    git, gitproject, project
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../pushed", multirepo="tools")
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("pushed", multirepo="tools")
+    )
+
+    assert git.committish_exists("refs/heads/pushed")
+    assert _record(git, "pushed") == {}
+    assert not (workarea / "pushed").exists()
+
+
+def test_worktree_rm_multirepo_deletes_a_branch_it_created(
+    git, gitproject, project
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-d", multirepo="tools")
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-d", multirepo="tools")
+    )
+
+    git = git_project.Git()
+    assert not git.committish_exists("refs/heads/wt-d")
+    assert _record(git, "wt-d") == {}
+    assert not (workarea / "wt-d").exists()
+
+
+def test_worktree_rm_check_changes_nothing(git, gitproject, project):
+    _add(git, gitproject, project, "../wt-k", multirepo="tools")
+    before = _repo_state(git)
+
+    command_worktree_rm(
+        git,
+        gitproject,
+        project,
+        _rm_clargs("wt-k", multirepo="tools", check=True),
+    )
+
+    assert _repo_state(git) == before

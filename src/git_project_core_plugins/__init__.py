@@ -37,6 +37,7 @@ git repositories.  These plugins include commands to:
 #. Run commands (e.g. configure/build/install)
 #. Associate artifacts with a project
 #. Show extended help for a command
+#. Run a command in every repository of a set
 
 These plugins add a number of commands to git-project.  Each command has an
 associated ``--help`` option to describe its function and options.  There is
@@ -133,6 +134,7 @@ from .common import add_plugin_version_argument
 from .config import ConfigPlugin
 from .help import Help, HelpPlugin
 from .init import InitPlugin
+from .multirepo import MultirepoPlugin, SetPlugin
 from .run import RunPlugin
 from .worktree import Worktree, WorktreePlugin
 
@@ -145,7 +147,9 @@ __all__ = [
     "Help",
     "HelpPlugin",
     "InitPlugin",
+    "MultirepoPlugin",
     "RunPlugin",
+    "SetPlugin",
     "Worktree",
     "WorktreePlugin",
     "add_plugin_version_argument",

@@ -64,10 +64,20 @@ init
 
 .. autoclass:: git_project_core_plugins.init.InitPlugin
 
+multirepo
+---------
+
+.. autoclass:: git_project_core_plugins.multirepo.MultirepoPlugin
+
 run
 ---
 
 .. autoclass:: git_project_core_plugins.run.RunPlugin
+
+set
+---
+
+.. autoclass:: git_project_core_plugins.multirepo.SetPlugin
 
 worktree
 --------

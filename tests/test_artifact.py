@@ -178,6 +178,33 @@ def test_artifact_rm_config(git_project_runner, git, project):
     assert not tempdir.exists()
 
 
+def test_artifact_rm_config_checks_every_path_first(
+    git_project_runner, git, project
+):
+    from git_project import GitProjectError
+
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    tempdir = Path(workdir) / "temp"
+
+    tempdir.mkdir()
+
+    for path in (tempdir, git.get_git_common_dir()):
+        git_project_runner.run(
+            ".*", "", "artifact", "add", "myconfigobject", f"{path}"
+        )
+
+    git.reload_config()
+
+    obj = MyConfigObject.get(git, project.get_section(), "test")
+    with pytest.raises(GitProjectError, match="Refusing to remove"):
+        obj.rm()
+
+    assert tempdir.exists()
+
+
 def test_artifact_rm_substitution(git_project_runner, git, project):
     workdir = git.get_working_copy_root()
 
@@ -412,3 +439,61 @@ def test_artifact_object_rm(reset_directory, git, project):
     artifact.rm()
 
     assert not Artifact.exists(git, project.get_section(), "gone")
+
+
+def test_artifact_removal_paths_read_only_matches(
+    reset_directory, git, project, tmp_path, monkeypatch
+):
+    import subprocess
+
+    import git_project
+    import pygit2
+    from pygit2.enums import ConfigLevel
+
+    from git_project_core_plugins.artifact import artifact_removal_paths
+
+    workdir = Path(git.get_working_copy_root())
+    (workdir / "temp").mkdir()
+    elsewhere = tmp_path / "global-build"
+    elsewhere.mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".gitconfig").write_text(
+        f'[project "artifact.myconfigobject"]\n\titempath = {elsewhere}\n'
+        "\textra = temp\n"
+    )
+    # Setting itempath through Artifact.get would replace the global value
+    # in the cached config, so add the local one behind its back. It names
+    # the global single valued extra, which Artifact.get would copy into the
+    # local config.
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "--add",
+            "project.artifact.myconfigobject.itempath",
+            "{git_workdir}/{extra}",
+        ],
+        cwd=workdir,
+        check=True,
+    )
+    monkeypatch.setenv("HOME", str(home))
+    # libgit2 reads HOME once, at load, so point its global search path at
+    # the new home and open the repository again.
+    saved = pygit2.settings.search_path[ConfigLevel.GLOBAL]
+    pygit2.settings.search_path[ConfigLevel.GLOBAL] = str(home)
+    try:
+        git = git_project.Git()
+        obj = MyConfigObject.get(git, project.get_section(), "test")
+        config = Path(git.get_git_common_dir()) / "config"
+        before = config.read_bytes()
+
+        read_only = artifact_removal_paths(git, project, obj, read_only=True)
+        assert config.read_bytes() == before
+
+        writing = artifact_removal_paths(git, project, obj, read_only=False)
+    finally:
+        pygit2.settings.search_path[ConfigLevel.GLOBAL] = saved
+
+    assert sorted(read_only) == sorted([str(elsewhere), str(workdir / "temp")])
+    assert read_only == writing

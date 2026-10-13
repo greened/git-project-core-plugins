@@ -47,7 +47,10 @@ from git_project import (
     add_top_level_command,
 )
 
-from git_project_core_plugins.common import add_plugin_version_argument
+from git_project_core_plugins.common import (
+    add_config_properties,
+    add_plugin_version_argument,
+)
 
 
 def _protected_paths(git):
@@ -71,6 +74,53 @@ def _protected_paths(git):
     return [path.resolve() for path in protected]
 
 
+def _expand_artifact_path(fullpath):
+    """Return the paths that removing fullpath would remove."""
+    if not fullpath:
+        return []
+
+    fullpath = os.path.expandvars(os.path.expanduser(fullpath))
+
+    if os.path.lexists(fullpath):
+        return [fullpath]
+    return sorted(glob.glob(fullpath))
+
+
+def _check_protected(paths, git):
+    """Raise GitProjectError when a path is protected or contains one."""
+    protected = _protected_paths(git)
+
+    # Removing a link never touches its target, so a link needs no check.
+    # resolve() would also raise on a link that loops.
+    for path in paths:
+        if os.path.islink(path):
+            continue
+        resolved = Path(path).resolve()
+        for guard in protected:
+            if guard == resolved or guard.is_relative_to(resolved):
+                raise GitProjectError(
+                    f"Refusing to remove {path}: it is or contains {guard}"
+                )
+
+
+def _remove_paths(paths):
+    for path in paths:
+        # An earlier path in the list may have held this one.
+        if not os.path.lexists(path):
+            continue
+
+        print(f"rm -rf {shlex.quote(path)}")
+
+        if os.path.islink(path):
+            os.remove(path)
+            continue
+
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
+
+
 def remove_artifact_path(fullpath, git=None):
     """Remove the file or directory at fullpath, as rm -rf would, without a shell.
 
@@ -87,43 +137,54 @@ def remove_artifact_path(fullpath, git=None):
     and the git common dir.
 
     """
-    if not fullpath:
-        return
+    paths = _expand_artifact_path(fullpath)
+    _check_protected(paths, git)
+    _remove_paths(paths)
 
-    fullpath = os.path.expandvars(os.path.expanduser(fullpath))
 
-    if os.path.lexists(fullpath):
-        paths = [fullpath]
-    else:
-        paths = sorted(glob.glob(fullpath))
+def _read_artifact(git, project_section, artifact_ident):
+    """Return the Artifact at artifact_ident without writing the config."""
+    subsection, ident = Artifact._split_ident(artifact_ident)
+    add_config_properties(git, Artifact, project_section, subsection, ident)
+    artifact = Artifact.__new__(Artifact)
+    ConfigObject.__init__(artifact, git, project_section, subsection, ident)
+    return artifact
 
-    protected = _protected_paths(git)
 
-    # Check every match before removing any, so a glob that reaches a
-    # protected path removes nothing at all. Removing a link never touches
-    # its target, so a link needs no check. resolve() would also raise on a
-    # link that loops.
-    for path in paths:
-        if os.path.islink(path):
-            continue
-        resolved = Path(path).resolve()
-        for guard in protected:
-            if guard == resolved or guard.is_relative_to(resolved):
-                raise GitProjectError(
-                    f"Refusing to remove {path}: it is or contains {guard}"
-                )
+def _find_artifact(git, project_section, subsection, ident, read_only):
+    """Return the Artifact for the config object at subsection.ident, or the
+    general one for subsection, or None.
 
-    for path in paths:
-        print(f"rm -rf {shlex.quote(path)}")
+    """
+    for artifact_ident in (subsection + "." + ident, subsection):
+        if Artifact.exists(git, project_section, artifact_ident):
+            if read_only:
+                return _read_artifact(git, project_section, artifact_ident)
+            return Artifact.get(git, project_section, artifact_ident)
+    return None
 
-        if os.path.islink(path):
-            os.remove(path)
-            continue
 
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-        else:
-            os.remove(path)
+def artifact_removal_paths(git, project, config_object, read_only=False):
+    """Return the paths that removing config_object would remove through its
+    artifacts. Raise GitProjectError when one is a protected path or contains
+    one. A caller can then refuse before it removes anything. With read_only,
+    the config is left as it was.
+
+    """
+    artifact = _find_artifact(
+        git,
+        config_object._project_section,
+        config_object._subsection,
+        config_object._ident,
+        read_only,
+    )
+    paths = []
+    if artifact:
+        for path in artifact.iter_multival("itempath"):
+            fullpath = artifact.substitute_value(git, project, path)
+            paths.extend(_expand_artifact_path(fullpath))
+    _check_protected(paths, git)
+    return paths
 
 
 class Artifact(SubstitutableConfigObject):
@@ -364,31 +425,9 @@ the final git config section that will hold the artifact path.
         config_object_rm = ConfigObject.rm
 
         def artifact_rm(self):
-            # See if there is any artifact associated with this ConfigObject.
-            artifact = None
-            if Artifact.exists(
-                self._git,
-                self._project_section,
-                self._subsection + "." + self._ident,
-            ):
-                artifact = Artifact.get(
-                    self._git,
-                    self._project_section,
-                    self._subsection + "." + self._ident,
-                )
-            elif Artifact.exists(
-                self._git, self._project_section, self._subsection
-            ):
-                artifact = Artifact.get(
-                    self._git, self._project_section, self._subsection
-                )
-
-            if artifact:
-                for path in artifact.iter_multival("itempath"):
-                    fullpath = artifact.substitute_value(
-                        self._git, project, path
-                    )
-                    remove_artifact_path(fullpath, self._git)
+            # Check every path before removing any, so a refused one leaves
+            # them all in place.
+            _remove_paths(artifact_removal_paths(self._git, project, self))
 
             config_object_rm(self)
 
