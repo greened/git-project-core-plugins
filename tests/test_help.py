@@ -22,6 +22,7 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 import shlex
+import subprocess
 
 from git_project.test_support import check_config_file
 
@@ -91,3 +92,20 @@ def test_help_rm_help(git_project_runner, git):
         section_present=False,
         key_present=False,
     )
+
+
+def test_help_writes_no_project_defaults(git_project_runner, git):
+    workdir = git.get_working_copy_root()
+
+    git_project_runner.chdir(workdir)
+
+    git_project_runner.run(".*", "", "help", "foo")
+
+    result = subprocess.run(
+        ["git", "config", "--get-regexp", r"^project\.(branch|remote)$"],
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.stdout == ""

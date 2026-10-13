@@ -246,7 +246,9 @@ class HelpPlugin(Plugin):
             parser_manager, "help", "help", help="Display help"
         )
 
-        help_parser.set_defaults(func=command_help)
+        help_parser.set_defaults(
+            func=command_help, write_project_defaults=False
+        )
 
         add_plugin_version_argument(help_parser)
 
