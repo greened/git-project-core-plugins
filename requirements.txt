@@ -20,4 +20,5 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 git-project >= 0.0.44
+pygit2 >= 1.18.2
 pytest-console-scripts
