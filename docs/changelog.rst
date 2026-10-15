@@ -31,6 +31,21 @@ ChangeLog
 `Unreleased`_
 -------------
 
+`0.1.0`_ - 2026-10-15
+---------------------
+Changed
+.......
+- Requires git-project 0.1.0, whose ``--menu=json`` names an option by its long flag.
+- core-plugins declares its own dependency on pygit2 1.18.2 or later, which it imports directly.
+- Versions follow semantic versioning from 0.1.0. Before 1.0.0 a breaking change bumps the minor version, and a feature or a fix bumps the patch. From 1.0.0 on, a breaking change bumps the major version, a feature the minor and a fix the patch.
+
+Fixed
+.....
+- ``worktree add`` uses or creates the branch when a tag has the same name, rather than failing with reference is not a branch. ``multirepo --commit`` failed the same way. ``worktree rm`` checks whether the branch is merged, rather than the tag.
+- A failed ``worktree add`` no longer removes git's record of a worktree of the same name that another add made meanwhile.
+- With ``-j``, a Ctrl-C reaches each running member as SIGINT, so an interrupted ``worktree add`` undoes its work as it does without ``-j``.
+- Running a command inside a worktree no longer rewrites that worktree's config. A directory whose path record has no worktree record is treated as outside any worktree, rather than gaining a new worktree record.
+
 `0.0.33`_ - 2026-10-13
 ----------------------
 Added
@@ -266,7 +281,8 @@ Fixed
   404. Issues named ``unknown/greened``, a leftover from hatch's project
   template, and Documentation misspelled the package name.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.0.33...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.0...HEAD
+.. _0.1.0: https://github.com/greened/git-project-core-plugins/compare/v0.0.33...v0.1.0
 .. _0.0.33: https://github.com/greened/git-project-core-plugins/compare/v0.0.32...v0.0.33
 .. _0.0.32: https://github.com/greened/git-project-core-plugins/compare/v0.0.31...v0.0.32
 .. _0.0.31: https://github.com/greened/git-project-core-plugins/compare/v0.0.30...v0.0.31

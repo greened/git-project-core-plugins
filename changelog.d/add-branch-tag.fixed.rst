@@ -1,1 +1,0 @@
-``worktree add`` uses or creates the branch when a tag has the same name, rather than failing with reference is not a branch. ``multirepo --commit`` failed the same way. ``worktree rm`` checks whether the branch is merged, rather than the tag.

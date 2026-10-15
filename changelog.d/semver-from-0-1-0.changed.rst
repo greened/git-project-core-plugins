@@ -1,1 +1,0 @@
-Versions follow semantic versioning from 0.1.0. Before 1.0.0 a breaking change bumps the minor version, and a feature or a fix bumps the patch. From 1.0.0 on, a breaking change bumps the major version, a feature the minor and a fix the patch.

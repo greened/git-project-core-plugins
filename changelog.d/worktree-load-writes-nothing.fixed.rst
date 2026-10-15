@@ -1,1 +1,0 @@
-Running a command inside a worktree no longer rewrites that worktree's config. A directory whose path record has no worktree record is treated as outside any worktree, rather than gaining a new worktree record.
