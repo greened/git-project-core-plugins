@@ -246,7 +246,10 @@ def _plan_worktree_add(git, project, clargs):
             raise GitProjectError(f"Branch {branch} already exists")
     elif newbranch != branch:
         branch = newbranch
-        create_branch = not git.committish_exists(branch)
+        # refs/heads/, so a tag of the same name is not taken for it.
+        create_branch = not git.committish_exists(
+            git.branch_name_to_refname(branch)
+        )
 
     if create_branch and not pygit2.reference_is_valid_name(
         git.branch_name_to_refname(branch)
@@ -358,7 +361,10 @@ def _apply_worktree_add(git, project, plan, multirepo=None):
 
     path_was_free = not os.path.lexists(plan.path)
     try:
-        git.add_worktree(plan.name, plan.path, plan.branch)
+        # The refname, since a tag of the same name would win the lookup.
+        git.add_worktree(
+            plan.name, plan.path, git.branch_name_to_refname(plan.branch)
+        )
     # A Ctrl-C raises KeyboardInterrupt, so undo on that too.
     except BaseException:
         # Only a directory this add made, never one that was already there.
@@ -447,9 +453,11 @@ def _plan_worktree_rm(git, project, clargs):
     # are going to delete the branch.  --keep-branch leaves the branch in place
     # both locally and on remotes, so the merge state cannot cost anything.
     # --keep-remote-branch still deletes the local branch, so it still applies.
+    # The record holds the branch name, and a tag of that name would win.
+    refname = git.branch_name_to_refname(worktree.committish)
     if (
         not keep_branch
-        and not project.branch_is_merged(worktree.committish)
+        and not project.branch_is_merged(refname)
         and not clargs.force
     ):
         raise GitProjectError(

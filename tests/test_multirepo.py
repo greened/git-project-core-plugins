@@ -1285,6 +1285,40 @@ def test_multirepo_commit_branch_at_another_commit_refused(mr):
     assert not state.worktree
 
 
+@pytest.mark.parametrize("with_branch", [False, True])
+def test_multirepo_commit_ignores_a_tag_named_like_the_branch(mr, with_branch):
+    members = _members(mr, "alpha", "beta")
+    beta = members["beta"]
+    _git("--git-dir", str(beta.store), "tag", "topic", mr.commits["beta"][2])
+    if with_branch:
+        _git(
+            "--git-dir",
+            str(beta.store),
+            "branch",
+            "topic",
+            mr.commits["beta"][0],
+        )
+
+    result = mr.run(
+        "multirepo",
+        "--commit",
+        "alpha",
+        mr.commits["alpha"][1],
+        "tools",
+        "worktree",
+        "add",
+        "topic",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    state = _state(beta.store)
+    assert str(state.branch.target) == mr.commits["beta"][0]
+    assert state.worktree
+    head = pygit2.Repository(str(beta.root / "topic")).head
+    assert head.name == "refs/heads/topic"
+    assert ("branchcreated" in state.record) == (not with_branch)
+
+
 def test_multirepo_commit_without_a_branch_point_refused(mr):
     members = _members(mr, "alpha", "beta")
     beta = str(members["beta"].store)

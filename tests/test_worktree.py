@@ -3295,6 +3295,38 @@ def test_worktree_rm_multirepo_deletes_a_branch_it_created(
     assert not (workarea / "wt-d").exists()
 
 
+def _tag(git, name, committish):
+    repo = pygit2.Repository(git.get_git_common_dir())
+    repo.create_reference(
+        f"refs/tags/{name}", repo.revparse_single(committish).id
+    )
+
+
+def test_worktree_rm_merge_check_ignores_a_tag_named_like_the_branch(
+    git, gitproject, project
+):
+    _add(git, gitproject, project, "../wt-t", committish="unmerged")
+    _tag(git, "wt-t", "master")
+
+    with pytest.raises(git_project.GitProjectError, match="not merged"):
+        command_worktree_rm(git, gitproject, project, _rm_clargs("wt-t"))
+
+    assert git.committish_exists("refs/heads/wt-t")
+
+
+def test_worktree_rm_deletes_a_merged_branch_beside_a_tag_of_its_name(
+    git, gitproject, project
+):
+    _add(git, gitproject, project, "../wt-t")
+    _tag(git, "wt-t", "unmerged")
+
+    command_worktree_rm(git, gitproject, project, _rm_clargs("wt-t"))
+
+    git = git_project.Git()
+    assert not git.committish_exists("refs/heads/wt-t")
+    assert git.committish_exists("refs/tags/wt-t")
+
+
 def test_worktree_rm_check_changes_nothing(git, gitproject, project):
     _add(git, gitproject, project, "../wt-k", multirepo="tools")
     before = _repo_state(git)
