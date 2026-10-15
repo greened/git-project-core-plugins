@@ -563,8 +563,8 @@ def _group_alive(pgid):
 def _run_parallel(tasks, jobs, cancel, on_done):
     pending = deque(tasks)
     running = []
-    # A group can outlive its leader, so keep each one sent SIGTERM until it
-    # is gone or has had SIGKILL.
+    # A group can outlive its leader, so keep each one signalled until it is
+    # gone or has had SIGKILL.
     groups = []
     term_sent = None
     killed = False
@@ -581,8 +581,11 @@ def _run_parallel(tasks, jobs, cancel, on_done):
                     running.append((task, proc))
 
             if cancel.cancelled and running and term_sent is None:
+                # A Ctrl-C goes on as SIGINT, so a member's own interrupt
+                # handling, such as the add's undo, runs.
+                signum = signal.SIGTERM if cancel.terminated else signal.SIGINT
                 for _task, proc in running:
-                    _killpg(proc.pid, signal.SIGTERM)
+                    _killpg(proc.pid, signum)
                     groups.append(proc.pid)
                 term_sent = time.monotonic()
             if term_sent is not None and not killed:
@@ -1170,9 +1173,9 @@ class MultirepoPlugin(Plugin):
     more members, prints the table and exits with a failure status. SIGTERM
     does the same, and multirepo also sends SIGTERM to the running member,
     then SIGKILL if it has not exited after five seconds. SIGHUP is treated
-    as SIGTERM. With ``-j``, any of these signals makes multirepo send
-    SIGTERM to the process group of each running member, then SIGKILL to any
-    group left after five seconds.
+    as SIGTERM. With ``-j``, multirepo sends SIGINT for a Ctrl-C, and
+    SIGTERM for SIGTERM or SIGHUP, to the process group of each running
+    member. It sends SIGKILL to any group left after five seconds.
 
     ``--commit <member> <sha>`` lines the new worktrees up in time. It works
     only with ``worktree add`` and no <committish>. In <member> the new

@@ -24,6 +24,7 @@
 import argparse
 import contextlib
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -1739,6 +1740,69 @@ def test_multirepo_parallel_sigint_stops_every_member(mr, tmp_path):
         parent.kill()
         _kill(pids)
 
+    for member in members.values():
+        _assert_untouched(member.store)
+    lines = out.splitlines()
+    for name in members:
+        assert any(line.split()[:2] == [name, "killed"] for line in lines), out
+
+
+def test_multirepo_parallel_sigint_reaches_the_work_phase_as_sigint(
+    mr, tmp_path
+):
+    members = _members(mr, "alpha", "beta")
+    markers = tmp_path / "markers"
+    markers.mkdir()
+    signals = tmp_path / "signals"
+    signals.mkdir()
+    real = shutil.which("git")
+    # The checks pass, and in the work phase git records the signal that
+    # stops it.
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    (shim / "git").write_text(
+        "#!/bin/sh\n"
+        "if tr '\\0' '\\n' < /proc/$PPID/cmdline | grep -qx -- --check; then\n"
+        f'  exec "{real}" "$@"\n'
+        "fi\n"
+        f"trap 'echo INT > \"{signals}/$$\"; exit 130' INT\n"
+        f"trap 'echo TERM > \"{signals}/$$\"; exit 143' TERM\n"
+        f'echo $$ > "{markers}/$$.tmp" && mv "{markers}/$$.tmp" "{markers}/$$"\n'
+        "sleep 60\n"
+    )
+    (shim / "git").chmod(0o755)
+    env = dict(os.environ, PATH=f"{shim}{os.pathsep}{os.environ['PATH']}")
+
+    parent = _start(
+        mr,
+        tmp_path,
+        "multirepo",
+        "-j",
+        "2",
+        "tools",
+        "worktree",
+        "add",
+        "topic",
+        env=env,
+    )
+    pids = []
+    try:
+        _wait_for(lambda: len(_finished(markers)) == 2)
+        pids = [int(path.name) for path in _finished(markers)]
+        os.killpg(parent.pid, signal.SIGINT)
+        rc = parent.wait(timeout=60)
+
+        # Before the cleanup below, which would kill them anyway.
+        out = (tmp_path / "out").read_text()
+        assert rc == 128 + signal.SIGINT, out
+        for pid in pids:
+            _wait_for(lambda pid=pid: _gone(pid), timeout=10)
+    finally:
+        parent.kill()
+        _kill(pids)
+
+    for pid in pids:
+        assert (signals / str(pid)).read_text() == "INT\n", out
     for member in members.values():
         _assert_untouched(member.store)
     lines = out.splitlines()
