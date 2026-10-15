@@ -887,7 +887,7 @@ def test_worktree_rm_unset_builddir(git, git_project_runner, tmp_path_factory):
 def test_worktree_rm_keep_branch(
     git, git_project_runner, tmp_path_factory, monkeypatch
 ):
-    # This test pushes, so it reaches a pre-push hook.  Ignore the user's git
+    # This test pushes, so it reaches a pre-push hook. Ignore the user's git
     # configuration to keep it hermetic.
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -908,7 +908,7 @@ def test_worktree_rm_keep_branch(
     assert git.committish_exists("user/test_keep_branch")
 
     # --keep-branch keeps the branch on remotes too, so push it first or that
-    # half of the promise holds no matter what rm does.  Name the destination
+    # half of the promise holds no matter what rm does. Name the destination
     # ref explicitly: the fixture remote is a mirror and also carries
     # refs/remotes/origin/*, so a bare branch name lands there instead of in
     # refs/heads, which is the only place remote_branch_exists looks.
@@ -938,7 +938,7 @@ def test_worktree_rm_keep_branch_supersedes_keep_remote_branch(
     git, git_project_runner, tmp_path_factory, monkeypatch
 ):
     # keep_branch short-circuits the prune entirely, so keep_remote_branch
-    # never gets consulted and both copies survive.  Passing both flags must
+    # never gets consulted and both copies survive. Passing both flags must
     # therefore behave exactly like --keep-branch alone, not like
     # --keep-remote-branch.
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
@@ -987,7 +987,7 @@ def test_worktree_rm_unmerged_requires_force(
     git, git_project_runner, tmp_path_factory
 ):
     # Branch the worktree off the fixture's unmerged branch so the merge check
-    # actually fires.  Every other rm test branches off master, which is
+    # actually fires. Every other rm test branches off master, which is
     # merged by construction.
     workarea = git.get_working_copy_root()
 
@@ -1055,7 +1055,7 @@ def test_worktree_rm_keep_branch_unmerged(
 
     assert os.path.exists(workarea.parent / "user" / "test_keep_unmerged")
 
-    # Guard against a false pass.  If this branch were merged, the check under
+    # Guard against a false pass. If this branch were merged, the check under
     # test would be skipped for the wrong reason and rm would succeed anyway.
     assert not git.refname_is_merged("user/test_keep_unmerged", "master")
 
@@ -1077,7 +1077,7 @@ def test_worktree_rm_keep_remote_branch(
     git, git_project_runner, tmp_path_factory, monkeypatch
 ):
     # This is the only test that pushes, so it is the only one that reaches a
-    # pre-push hook.  Ignore the user's git configuration to keep it hermetic.
+    # pre-push hook. Ignore the user's git configuration to keep it hermetic.
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
 
@@ -1094,7 +1094,7 @@ def test_worktree_rm_keep_remote_branch(
     )
 
     # prune_branch only deletes from a remote the branch is actually on, so
-    # push it first or the assertion below holds no matter what rm does.  Name
+    # push it first or the assertion below holds no matter what rm does. Name
     # the destination ref explicitly: the fixture remote is a mirror and also
     # carries refs/remotes/origin/*, so a bare branch name lands there instead
     # of in refs/heads, which is the only place remote_branch_exists looks.

@@ -93,7 +93,7 @@ def get_hidden_gitdir_name(url: str):
     result = urllib.parse.urlparse(url)
     urlpath = Path(result.path)
 
-    # If .git is the suffix, remove it.  If ".git" is the last
+    # If .git is the suffix, remove it. If ".git" is the last
     # component, use the parent name.
     urlname = urlpath.name
     if urlname == ".git":
@@ -494,7 +494,7 @@ class Worktree(ScopedConfigObject):
     """A ScopedConfigObject to manage worktree git configs."""
 
     class Path(ConfigObject):
-        """A ConfigObject to manage worktree paths.  Each worktree config section has an
+        """A ConfigObject to manage worktree paths. Each worktree config section has an
         associated worktreepath config section to allow fast mapping from a
         worktree path to its Worktree ConfigObject.
 
@@ -622,7 +622,7 @@ class Worktree(ScopedConfigObject):
         and on any remotes.
 
         keep_remote_branch: If True, delete the local branch but leave it in
-        place on every remote.  Implied by keep_branch.
+        place on every remote. Implied by keep_branch.
 
         """
         # Read what the steps below need first, because removing the config
@@ -1973,8 +1973,8 @@ class WorktreePlugin(Plugin):
     refused, nothing is removed. The branch is deleted too, locally and on each
     project remote, unless a flag says otherwise: ``--keep-branch`` leaves the
     branch alone everywhere, and ``--keep-remote-branch`` deletes only the
-    local copy.  A branch the project configures is never deleted, whatever the
-    flags say.  Removing a worktree whose branch is unmerged requires ``-f``,
+    local copy. A branch the project configures is never deleted, whatever the
+    flags say. Removing a worktree whose branch is unmerged requires ``-f``,
     unless ``--keep-branch`` means the branch survives anyway.
 
     With ``--check``, ``worktree add`` and ``worktree rm`` make the checks
@@ -1986,12 +1986,12 @@ class WorktreePlugin(Plugin):
     true``. It refuses a record whose ``branchcreated`` is anything else.
 
     The key idea behind project worktrees is that they are connected to various
-    ``artifacts``.  Worktrees are managed together with these artifacts to
-    provide a project-level view of various tasks.  For example, a ``run``
-    command can create artifacts associated with a worktree.  Removing the
+    ``artifacts``. Worktrees are managed together with these artifacts to
+    provide a project-level view of various tasks. For example, a ``run``
+    command can create artifacts associated with a worktree. Removing the
     worktree implicitly removes these artifacts, making build cleanups easy and
-    convenient.  Commands may use the {worktree} substitution to create
-    worktree-unique artifacts.  Other substitutions may also reference
+    convenient. Commands may use the {worktree} substitution to create
+    worktree-unique artifacts. Other substitutions may also reference
     {worktree} in a recursive manner.
 
     Here is a concrete example::
@@ -2004,7 +2004,7 @@ class WorktreePlugin(Plugin):
 
     Assuming the build system uses BUILDDIR to determine where build artifacts
     go, each worktree will get a unique set of build artifacts, via the
-    {builddir} and, recursively, {worktree} substitutions.  When we delete the
+    {builddir} and, recursively, {worktree} substitutions. When we delete the
     worktree, we'll also delete the associated build directory.
 
     We associate artifacts with worktrees via the artifact commands.
@@ -2012,8 +2012,8 @@ class WorktreePlugin(Plugin):
     Another important benefit of worktrees and associated builds is that
     switching to work on a new worktree (by simply editing sources in a
     different worktree directory) will not result in build artifacts from the
-    previous worktree being overwritten.  Thus we avoid the ``rebuild the
-    world`` problems of switching branches within the same workarea.  Generally,
+    previous worktree being overwritten. Thus we avoid the ``rebuild the
+    world`` problems of switching branches within the same workarea. Generally,
     each created branch will have its own worktree and we will rarely, if ever,
     switch branches within a worktree.
 
@@ -2034,23 +2034,23 @@ class WorktreePlugin(Plugin):
     https://pypi.org/project/git-project/
 
     The worktree plugin also adds a --worktree option to the clone and init
-    commands.  Both set up the ``umbrella layout`` described in the package
-    documentation.  The bare repository is a hidden child directory named for
-    the last component of the remote url, such as ``.myrepo.git``.  The
+    commands. Both set up the ``umbrella layout`` described in the package
+    documentation. The bare repository is a hidden child directory named for
+    the last component of the remote url, such as ``.myrepo.git``. The
     umbrella holds it alongside the worktrees.
 
     ``clone --worktree`` clones bare, then rewrites the fetch refspec and sets
     the main branch to track its remote branch, so fetch and pull behave as
-    they do in a regular clone.  The refs/heads and refs/remotes namespaces
+    they do in a regular clone. The refs/heads and refs/remotes namespaces
     remain, and every other local branch is deleted. Add ``--bare`` to skip
     the refspec rewrite. The clone still gets the ``.git`` file and the main
     worktree. With no <path>, ``clone --worktree`` uses the current directory
     itself as the umbrella, where a plain clone makes a new one.
 
-    ``init --worktree`` converts an existing clone in place.  The workarea must
-    be clean.  The conversion deletes every file in the umbrella except the
+    ``init --worktree`` converts an existing clone in place. The workarea must
+    be clean. The conversion deletes every file in the umbrella except the
     git directory, so preserve anything there that is not part of the
-    repository.  Only the main branch gets a worktree, so a different
+    repository. Only the main branch gets a worktree, so a different
     checked-out branch gets none, though one is easy to add afterward. To
     convert a clone you work in, with its branches and linked worktrees, use
     ``worktree migrate`` instead.
@@ -2379,7 +2379,7 @@ class WorktreePlugin(Plugin):
             )
 
     def _choose_main_branch(self, git):
-        """Return the refname of the main branch.  Ask the user if we cannot determine a
+        """Return the refname of the main branch. Ask the user if we cannot determine a
         unique main branch.
 
         """
@@ -2401,7 +2401,7 @@ class WorktreePlugin(Plugin):
 
     def _rewrite_bare_refspects(self, p_git):
         """Modify refspects to convert from a bare repository so that we merge origin
-        branches to local branches.  Return he refname of the main branch.
+        branches to local branches. Return he refname of the main branch.
 
         """
         assert p_git.is_bare_repository()
@@ -2469,7 +2469,7 @@ class WorktreePlugin(Plugin):
 
                     # If the user did not ask for a bare repo, rewrite refspecs,
                     # fetch remote refs and rewrite existing refs (just main)
-                    # to track the remote ref.  Delete other "local" branches.
+                    # to track the remote ref. Delete other "local" branches.
                     main = ""
                     if not bare_specified:
                         main = self._rewrite_bare_refspects(p_git)
@@ -2564,7 +2564,7 @@ class WorktreePlugin(Plugin):
                             )
 
                         # Set bare and detach before removing files so they
-                        # don't come back.  If we detach later, files will be
+                        # don't come back. If we detach later, files will be
                         # checkout out.
                         p_git.config.set_item("core", "bare", "true")
                         p_git.detach_head()
@@ -2608,7 +2608,7 @@ class WorktreePlugin(Plugin):
 
                         # Note that since this is a bare repository, we may have
                         # branches besides main that are not pushed to
-                        # whatever remote they should go to.  In general we
+                        # whatever remote they should go to. In general we
                         # cannot know which branches should go where so just
                         # punt and tell the user to clean them up.
                         for refname in p_git.iterrefnames(["refs/heads"]):
