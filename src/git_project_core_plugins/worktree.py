@@ -320,10 +320,13 @@ def _undo_worktree_add(git, project, plan, worktree_added):
 
     def prune():
         # libgit2 can leave its record of the worktree behind when the add
-        # fails, and that record holds the branch checked out.
+        # fails, and that record holds the branch checked out. A valid
+        # record, which another add may own, stays.
         repo = pygit2.Repository(git.get_git_common_dir())
         if plan.name in repo.list_worktrees():
-            repo.lookup_worktree(plan.name).prune(True)
+            worktree = repo.lookup_worktree(plan.name)
+            if worktree.is_prunable:
+                worktree.prune()
 
     steps.append((f"git's record of worktree {plan.name}", prune))
     if plan.create_branch:

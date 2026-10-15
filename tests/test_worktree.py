@@ -3157,6 +3157,40 @@ def test_worktree_add_record_failure_removes_worktree(
     assert _repo_state(git) == before
 
 
+def test_worktree_add_failure_keeps_a_worktree_another_add_made(
+    git, gitproject, project, monkeypatch, capsys
+):
+    other = _base() / "other"
+    real = git.add_worktree
+
+    # Another add takes the name after the plan has checked it is free.
+    def race(name, path, committish):
+        repo = pygit2.Repository(git.get_git_common_dir())
+        branch = repo.branches.local.create(
+            "other", repo.branches.local["master"].peel()
+        )
+        repo.add_worktree(name, str(other), branch)
+        real(name, path, committish)
+
+    monkeypatch.setattr(git, "add_worktree", race)
+
+    with pytest.raises(pygit2.AlreadyExistsError):
+        command_worktree_add(
+            git,
+            gitproject,
+            project,
+            _add_clargs("../wt-r", committish="master"),
+        )
+
+    monkeypatch.undo()
+    assert "warning" not in capsys.readouterr().err
+    repo = pygit2.Repository(git.get_git_common_dir())
+    assert "wt-r" in repo.list_worktrees()
+    assert other.is_dir()
+    assert not git.committish_exists("refs/heads/wt-r")
+    assert _record(git, "wt-r") == {}
+
+
 def _add(git, gitproject, project, path, **kwargs):
     kwargs.setdefault("committish", "master")
     command_worktree_add(git, gitproject, project, _add_clargs(path, **kwargs))
