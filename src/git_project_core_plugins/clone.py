@@ -43,7 +43,7 @@ def command_clone(git, gitproject, project, clargs):
         bare=clargs.bare,
     )
 
-    # Now that we have a repository, add sensible project defaults.  We know
+    # Now that we have a repository, add sensible project defaults. We know
     # there is no existing project in the config file since we just cloned.
     # This will have the effect of adding a project section.
     project.set_defaults()

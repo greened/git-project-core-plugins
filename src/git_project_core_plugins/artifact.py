@@ -281,9 +281,9 @@ class ArtifactPlugin(Plugin):
       git <project> artifact rm <subsection> [<path>]
 
     <subsection> is a git config section which will appear under the
-    <project>.artifact section.  Artifacts look up objects associated with
+    <project>.artifact section. Artifacts look up objects associated with
     <subsection> and perform substitutions on paths to yield the final
-    associated file-system object.  The ``artifact rm`` command simply removes
+    associated file-system object. The ``artifact rm`` command simply removes
     an artifact association, it does not remove the artifact itself. A
     <subsection> may hold several paths. With <path>, ``artifact rm`` removes
     only that association. <path> is a regular expression that git matches
@@ -312,7 +312,7 @@ class ArtifactPlugin(Plugin):
       git <project> artifact add worktree /path/to/{worktree}/artifact
 
     Notice that we've added the artifact under the more general ``worktree``
-    subsection instead of naming a worktree explicitly as before.  Because the
+    subsection instead of naming a worktree explicitly as before. Because the
     {worktree} substitution appears in the artifact path, deleting any worktree
     will cause the worktree's name to be substituted into the artifact path,
     forming a unique artifact path to remove. If a worktree also has its own
@@ -331,7 +331,7 @@ class ArtifactPlugin(Plugin):
       git <project> artifact add worktree "{builddir}"
 
     We've added a single artifact association that will handle any worktree and
-    all of our different build types.  When we delete the worktree, all
+    all of our different build types. When we delete the worktree, all
     artifacts related to debug, release and check builds will also be removed.
 
     See also::

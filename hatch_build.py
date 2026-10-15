@@ -22,9 +22,9 @@
 """Build the PyPI long description, command reference included.
 
 The package docstring appends the command reference at import time, so the
-docs and ``help()`` get it for free.  A build cannot rely on that: importing
+docs and ``help()`` get it for free. A build cannot rely on that: importing
 the package needs its dependencies installed, which is not true while the
-package is being built.  So this hook parses the sources instead, sharing the
+package is being built. So this hook parses the sources instead, sharing the
 formatter with the runtime path.
 
 This replaces hatch-fancy-pypi-readme for this package, because that hook can
@@ -44,7 +44,7 @@ def _load_commanddocs():
 
     A plain import would run ``git_project_core_plugins/__init__.py``, which
     imports git_project, so the build would need the runtime dependency
-    installed before it could compute its own metadata.  This module stands
+    installed before it could compute its own metadata. This module stands
     alone, so load it straight from its path.
     """
     path = (
@@ -89,7 +89,7 @@ class ReadmeMetadataHook(MetadataHookInterface):
         authors = authors[: authors.index("A full list of contributors")]
 
         # The prose ends in a literal block, so the sections need a blank line
-        # between them or the next one unindents into it.  That is an RST error
+        # between them or the next one unindents into it. That is an RST error
         # and PyPI rejects a description that fails to render.
         text = "\n".join([prose, reference, authors])
 

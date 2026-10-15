@@ -189,7 +189,7 @@ def test_branch_prune_keep_remote_branch(
 
     command_branch_prune = branch_prune_parser.get_default("func")
 
-    # Guard against a false pass.  The remote copy has to be there before the
+    # Guard against a false pass. The remote copy has to be there before the
     # prune, or the assertion below holds no matter what prune does.
     assert git.committish_exists("refs/remotes/origin/merged_remote")
 

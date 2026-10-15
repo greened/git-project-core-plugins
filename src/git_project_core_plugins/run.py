@@ -21,8 +21,8 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
-"""A plugin to add a 'run' command to git-project.  The run command invokes an
-arbitrary command.  It can be used to perform any action, such as building the
+"""A plugin to add a 'run' command to git-project. The run command invokes an
+arbitrary command. It can be used to perform any action, such as building the
 project.
 
 Summary:
@@ -142,7 +142,7 @@ class RunPlugin(Plugin):
       git <project> add build some "{cmd}"
 
     We have configured two different build flavors, each which place build
-    results in separate directories and invoke different targets.  Substitution
+    results in separate directories and invoke different targets. Substitution
     proceeds as follows::
 
       git <project> build all -> make -C /cur/workarea BLDDIR=/path/to/all all
@@ -215,10 +215,6 @@ class RunPlugin(Plugin):
             alias + "Class",
             (RunnableConfigObject,),
             {
-                #            __doc__ = f"""A RunnableConfigObject to manage {alias} names.  Each run name gets its own
-                #            config section.
-                #
-                #            """
                 "subsection": subsection,
                 "get_managing_command": get_managing_command,
             },

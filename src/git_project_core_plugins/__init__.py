@@ -27,7 +27,7 @@ git-project-core-plugins
 Plugins for `git-project <http://www.github.com/greened/git-project>`_
 
 This is a set of basic plugins to manage several aspects of projects kept within
-git repositories.  These plugins include commands to:
+git repositories. These plugins include commands to:
 
 #. Configure git-project and its various plugins
 #. Clone repositories
@@ -39,8 +39,8 @@ git repositories.  These plugins include commands to:
 #. Show extended help for a command
 #. Run a command in every repository of a set
 
-These plugins add a number of commands to git-project.  Each command has an
-associated ``--help`` option to describe its function and options.  There is
+These plugins add a number of commands to git-project. Each command has an
+associated ``--help`` option to describe its function and options. There is
 also a ``help`` command that accesses more extensive manpage-like descriptions
 of commands.
 
@@ -65,7 +65,7 @@ the umbrella, holds a bare repository and its worktrees::
     worktree3
 
 That is, either a bare clone is done, or an existing clone is converted to a
-bare clone via ``git <project> init --worktree``.  The bare repository is the
+bare clone via ``git <project> init --worktree``. The bare repository is the
 hidden ``.<name>.git`` child, named for the last component of the remote url,
 and the umbrella ``<path>`` holds it alongside the worktrees. The ``.git`` beside it is a
 file holding ``gitdir: .<name>.git``, so git works from ``<path>`` too. It is
@@ -79,12 +79,12 @@ linked worktrees, is converted with ``git <project> worktree migrate``
 instead, which keeps them all.
 
 Either route also creates a worktree for the project's main branch, so the
-layout is usable straight away.  The main branch is taken from the repository
+layout is usable straight away. The main branch is taken from the repository
 when it can be determined uniquely, and you are asked which to use when it
 cannot.
 
 The point of the layout is that each worktree can own its own build and install
-trees.  Switching from worktree to worktree then does not result in "rebuilding
+trees. Switching from worktree to worktree then does not result in "rebuilding
 the world."
 
 Examples

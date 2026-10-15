@@ -91,8 +91,8 @@ class ConfigPlugin(Plugin):
 
     The config command operates much like git's built-in config command, except
     all configuration keys are prefixed with <project>, keeping values under a
-    single project namespace.  This is a convenient way to store parameters for
-    other commands.  For example::
+    single project namespace. This is a convenient way to store parameters for
+    other commands. For example::
 
       git <project> config builddir /path/to/build
       git <project> add run build "make BUILDDIR={builddir} all"

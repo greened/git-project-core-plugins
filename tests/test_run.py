@@ -32,7 +32,7 @@ from git_project_core_plugins import RunPlugin
 
 
 def make_script(*paths, status=0):
-    """Create an executable script at each of paths, exiting with status.  Create
+    """Create an executable script at each of paths, exiting with status. Create
     each script's parent directory as well if it does not exist.
 
     A test that invokes a run command has to create the script the command runs,

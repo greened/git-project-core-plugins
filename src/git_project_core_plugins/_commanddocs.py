@@ -22,13 +22,13 @@
 """Build the command reference from the plugin classes.
 
 Each ``<Name>Plugin`` class documents its own command, so that docstring is the
-only place the command is described.  This module renders those docstrings as
+only place the command is described. This module renders those docstrings as
 an RST section, which the package docstring appends at import time and the
-build appends to the PyPI description.  A hand-maintained copy drifted from the
+build appends to the PyPI description. A hand-maintained copy drifted from the
 classes it was copied from, which is the failure this replaces.
 
-Two extractors, one formatter.  ``from_classes`` introspects imported
-classes and serves the runtime docstring.  ``from_source`` parses the
+Two extractors, one formatter. ``from_classes`` introspects imported
+classes and serves the runtime docstring. ``from_source`` parses the
 sources with ``ast`` and serves the build, where importing the package would
 require its dependencies to be installed first.
 """

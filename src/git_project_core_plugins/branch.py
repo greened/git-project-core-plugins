@@ -168,7 +168,7 @@ def command_branch_prune(git, gitproject, project, clargs):
     print("-" * separator_width)
 
     # FIXME: Prunes all branchs that start with the given name becuase
-    # iterrefnames does a startswith match.  This is probably not what we should
+    # iterrefnames does a startswith match. This is probably not what we should
     # do.
     for branch in git.iterrefnames([ref]):
         status = "merged" if project.branch_is_merged(branch) else "unmerged"

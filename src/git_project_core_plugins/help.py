@@ -47,9 +47,9 @@ def _print_general_help(git, gitproject, project, clargs):
 
 git-project aims to make managing various project aspects simple and convenient.
 The key idea of git-project is that various project actions may be coupled to
-the source code repository or workarea in some fashion.  For example, developers
+the source code repository or workarea in some fashion. For example, developers
 may want builds isolated by the current branch, such that build directories are
-encoded with the branch name.  Or users may want to create worktrees associated
+encoded with the branch name. Or users may want to create worktrees associated
 with build and install directories, so that removing a worktree also removes the
 associated build and install directories.
 
@@ -57,11 +57,11 @@ git-project may be invoked via ``git project <command> [options...]'' or, by
 linking the git-project command to another command named ``git-<name>'' it may
 be invoked via ``git <name> <command>.''  For example, linking ``git-project''
 to ``git-fizzbin'' we may invoke commands via ``git fizzbin <command>'' and all
-configuration will appear under a ``fizzbin'' config section.  Thus, a single
-repository may support multiple projects, each with a unique name.  To emphasize
+configuration will appear under a ``fizzbin'' config section. Thus, a single
+repository may support multiple projects, each with a unique name. To emphasize
 this, we will show invocations of git-project as ``git <project> [options...].''
 
-Plugins extend git-project with new functionality.  Each plugin should include
+Plugins extend git-project with new functionality. Each plugin should include
 extensive documentation accessible though --help flags or via help command
 options.
 
@@ -135,8 +135,8 @@ class Help(ConfigObject):
         )
 
 
-# Map command names to plugins.  We use this to see if a command given to
-# git-project help has its own built-in help in its plugin.  This avoids the
+# Map command names to plugins. We use this to see if a command given to
+# git-project help has its own built-in help in its plugin. This avoids the
 # need to store large help pages in the git config and also allows later
 # versions of plugins to provide new help and not be stuck with whatever happens
 # to be stored in the config.
@@ -211,7 +211,7 @@ class HelpPlugin(Plugin):
       git <project> add help run.build "Perform a build"
       git <project> add help run.check "Run tests"
 
-    All help is stored under a <project>.help config sub-section.  If a command
+    All help is stored under a <project>.help config sub-section. If a command
     supports it, such help may appear in the command's own help output by
     querying the appropriate <project>.help sub-section::
 
@@ -223,9 +223,9 @@ class HelpPlugin(Plugin):
           check                - Run tests
           build                - Perform a build
 
-    In this way projects can self-document their configurations.  Normally
-    <text> is stored in <project>.help.<subsection>.short.  With --manpage,
-    <text> is stored in <project>.help.<subsection>.manpage.  Commands may
+    In this way projects can self-document their configurations. Normally
+    <text> is stored in <project>.help.<subsection>.short. With --manpage,
+    <text> is stored in <project>.help.<subsection>.manpage. Commands may
     reference short help or manpages in various ways to present help.
 
     See also::
