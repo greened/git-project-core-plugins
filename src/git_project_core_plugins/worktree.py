@@ -52,7 +52,6 @@ from git_project_core_plugins.artifact import (
 )
 from git_project_core_plugins.common import (
     _GIT_REDIRECT_VARS,
-    add_config_properties,
     add_plugin_version_argument,
 )
 
@@ -410,24 +409,6 @@ def _record_values(git, worktree, key):
     )
 
 
-def _read_worktree(git, project, name):
-    """Return the Worktree for record name, and its path record, without
-    writing the config. Worktree.get writes every value back, and writes the
-    path record even when it was removed.
-
-    """
-    section = project.get_section()
-    add_config_properties(git, Worktree, section, Worktree.subsection(), name)
-    worktree = Worktree.__new__(Worktree)
-    ScopedConfigObject.__init__(
-        worktree, git, section, Worktree.subsection(), name
-    )
-    worktree._pathsection = Worktree.Path(
-        git, section, Worktree.Path.subsection(), worktree.path
-    )
-    return worktree
-
-
 def _plan_worktree_rm(git, project, clargs):
     """Check that worktree rm can go ahead, changing nothing. Return whether
     the worktree's branch stays.
@@ -438,7 +419,8 @@ def _plan_worktree_rm(git, project, clargs):
         git, project.get_section(), Worktree.subsection(), name
     ):
         raise GitProjectError(f"git-project has no record of worktree {name}")
-    worktree = _read_worktree(git, project, name)
+    worktree = Worktree.get(git, project, name)
+    project.pop_scope()
 
     keep_branch = clargs.keep_branch
     multirepo = getattr(clargs, "multirepo", None)
@@ -565,8 +547,11 @@ class Worktree(ScopedConfigObject):
 
         """
         super().__init__(git, project_section, subsection, ident, **kwargs)
+        # Only a new path writes the path record, so loading a worktree
+        # writes nothing.
+        record = {"worktree": ident} if "path" in kwargs else {}
         self._pathsection = self.Path.get(
-            git, project_section, self.path, worktree=ident
+            git, project_section, self.path, **record
         )
 
     @staticmethod
@@ -603,7 +588,16 @@ class Worktree(ScopedConfigObject):
         pathsection = cls.Path.get(git, project.get_section(), path)
         if hasattr(pathsection, "worktree"):
             assert pathsection.worktree
-            return cls.get(git, project, pathsection.worktree, path=path)
+            # An rm stopped between sections leaves a path record with no
+            # worktree record, and that record has no path to load.
+            if not ConfigObject.exists(
+                git,
+                project.get_section(),
+                cls.subsection(),
+                pathsection.worktree,
+            ):
+                return None
+            return cls.get(git, project, pathsection.worktree)
         return None
 
     def add(self):

@@ -148,6 +148,31 @@ def test_worktree_get(
     assert not hasattr(worktree, "prefix")
 
 
+@pytest.mark.parametrize(
+    "path_record", [True, False], ids=["path-record", "no-path-record"]
+)
+def test_worktree_get_existing_writes_nothing(
+    reset_directory, git, gitproject, project, parser_manager, path_record
+):
+    Worktree.get(
+        git, project, "test", path="/path/to/test", committish="master"
+    )
+    project.pop_scope()
+    if not path_record:
+        git.config.rm_section("project.worktreepath./path/to/test")
+        # Reload pygit2's cached config, which skips the removed value
+        # and hides the write from the byte check.
+        git.reinit(git.get_git_common_dir())
+    config = Path(git.get_git_common_dir()) / "config"
+    before = config.read_bytes()
+
+    worktree = Worktree.get(git, project, "test")
+
+    assert config.read_bytes() == before
+    assert worktree.path == "/path/to/test"
+    assert worktree._pathsection.has_item("worktree") == path_record
+
+
 def test_worktree_get_by_path(
     reset_directory, git, gitproject, project, parser_manager
 ):
@@ -173,6 +198,19 @@ def test_worktree_get_by_path(
     assert path_worktree.path == worktree.path
     assert path_worktree.committish == worktree.committish
     assert path_worktree.builddir == worktree.builddir
+
+
+def test_worktree_get_by_path_orphan_writes_nothing(
+    reset_directory, git, gitproject, project, parser_manager
+):
+    git.config.set_item(
+        "project.worktreepath./path/to/test", "worktree", "test"
+    )
+    config = Path(git.get_git_common_dir()) / "config"
+    before = config.read_bytes()
+
+    assert Worktree.get_by_path(git, project, "/path/to/test") is None
+    assert config.read_bytes() == before
 
 
 def test_worktree_scope(
