@@ -93,7 +93,10 @@ class ClonePlugin(Plugin):
         clone_parser.add_argument("url", help="URL to clone")
 
         clone_parser.add_argument(
-            "path", nargs="?", help="Local repository location"
+            "path",
+            nargs="?",
+            complete="directory",
+            help="Local repository location",
         )
 
         clone_parser.add_argument(

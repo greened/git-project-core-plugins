@@ -3339,3 +3339,28 @@ def test_worktree_rm_check_changes_nothing(git, gitproject, project):
     )
 
     assert _repo_state(git) == before
+
+
+def test_worktree_menu_hints(git, git_project_runner, script_runner):
+    workarea = git.get_working_copy_root()
+    os.chdir(workarea)
+    git_project_runner.chdir(workarea)
+
+    git_project_runner.run(
+        ".*", "", "worktree", "add", "../user/test_hints", "master"
+    )
+
+    def menu(*args):
+        result = script_runner.run(
+            ["git-project", *args, "--menu=json"], cwd=workarea
+        )
+        assert result.success
+        return json.loads(result.stdout)
+
+    [path, committish] = menu("worktree", "add")["positionals"]
+    assert path["complete"] == "directory"
+    assert committish["complete"] == "committish"
+
+    [name] = menu("worktree", "rm")["positionals"]
+    assert name["complete"] == "worktree"
+    assert name["candidates"] == ["test_hints"]

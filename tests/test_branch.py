@@ -22,6 +22,8 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 
+import json
+
 import common
 
 from git_project_core_plugins import BranchPlugin
@@ -279,3 +281,18 @@ def test_branch_status_target(
     assert lines["refs/heads/master"] == "yes"
     assert lines["refs/heads/unmerged"] == "no"
     assert lines["refs/heads/notpushed"] == "no"
+
+
+def test_branch_menu_hints(reset_directory, git, script_runner):
+    def positionals(command):
+        ret = script_runner.run(
+            "git-project", "branch", command, "--menu=json"
+        )
+        assert ret.success
+        return json.loads(ret.stdout)["positionals"]
+
+    assert [pos["complete"] for pos in positionals("status")] == [
+        "branch",
+        "branch",
+    ]
+    assert [pos["complete"] for pos in positionals("prune")] == ["branch"]

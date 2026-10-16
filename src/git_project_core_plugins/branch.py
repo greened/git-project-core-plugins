@@ -263,10 +263,14 @@ class BranchPlugin(Plugin):
         branch_status_parser.add_argument(
             "name_or_ref",
             nargs="?",
+            complete="branch",
             help="Branch or pattern to filter branches",
         )
         branch_status_parser.add_argument(
-            "target", nargs="?", help="Target branch to check against"
+            "target",
+            nargs="?",
+            complete="branch",
+            help="Target branch to check against",
         )
         branch_status_parser.add_argument(
             "--all", action="store_true", help="Show all branches"
@@ -288,6 +292,7 @@ class BranchPlugin(Plugin):
         branch_prune_parser.add_argument(
             "name_or_ref",
             nargs="?",
+            complete="branch",
             help="Branch name or pattern to filter branches",
         )
         branch_prune_parser.add_argument(

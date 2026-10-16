@@ -21,6 +21,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
+import json
 import os
 from pathlib import Path
 
@@ -137,3 +138,12 @@ def test_clone_path(
     assert os.path.exists(gitdir)
     assert os.path.exists(Path(gitdir) / ".git")
     assert gitdir == str(clone_path)
+
+
+def test_clone_menu_hints(reset_directory, script_runner):
+    ret = script_runner.run("git-project", "clone", "--menu=json")
+    assert ret.success
+
+    url, path = json.loads(ret.stdout)["positionals"]
+    assert url["complete"] is None
+    assert path["complete"] == "directory"

@@ -2284,10 +2284,13 @@ class WorktreePlugin(Plugin):
         worktree_add_parser.set_defaults(func=command_worktree_add)
 
         worktree_add_parser.add_argument(
-            "path", help="Path for worktree checkout"
+            "path", complete="directory", help="Path for worktree checkout"
         )
         worktree_add_parser.add_argument(
-            "committish", nargs="?", help="Branch point for worktree"
+            "committish",
+            nargs="?",
+            complete="committish",
+            help="Branch point for worktree",
         )
         worktree_add_parser.add_argument(
             "-b",
@@ -2313,7 +2316,16 @@ class WorktreePlugin(Plugin):
 
         worktree_rm_parser.set_defaults(func=command_worktree_rm)
 
-        worktree_rm_parser.add_argument("name", help="Worktree to remove")
+        worktree_rm_parser.add_argument(
+            "name",
+            complete="worktree",
+            candidates=sorted(
+                ConfigObject.iter_idents(
+                    git, project.get_section(), Worktree.subsection()
+                )
+            ),
+            help="Worktree to remove",
+        )
         worktree_rm_parser.add_argument(
             "-f",
             "--force",
