@@ -31,6 +31,12 @@ ChangeLog
 `Unreleased`_
 -------------
 
+`0.1.1`_ - 2026-10-19
+---------------------
+Added
+.....
+- ``--menu=json`` hints worktree, branch and clone arguments with ``complete``, and offers the recorded worktree names as ``candidates`` for ``worktree rm``. Needs git-project 0.1.1.
+
 `0.1.0`_ - 2026-10-15
 ---------------------
 Changed
@@ -281,7 +287,8 @@ Fixed
   404. Issues named ``unknown/greened``, a leftover from hatch's project
   template, and Documentation misspelled the package name.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.0...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.1...HEAD
+.. _0.1.1: https://github.com/greened/git-project-core-plugins/compare/v0.1.0...v0.1.1
 .. _0.1.0: https://github.com/greened/git-project-core-plugins/compare/v0.0.33...v0.1.0
 .. _0.0.33: https://github.com/greened/git-project-core-plugins/compare/v0.0.32...v0.0.33
 .. _0.0.32: https://github.com/greened/git-project-core-plugins/compare/v0.0.31...v0.0.32
