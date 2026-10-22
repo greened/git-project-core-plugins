@@ -1,1 +1,0 @@
-The help for ``clone`` and ``set clone`` no longer says an ssh url fails to authenticate. Both now need git-project 0.1.2, which clones an ssh url through git, with your ssh agent and ``~/.ssh/config``.

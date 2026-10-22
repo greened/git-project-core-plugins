@@ -1,1 +1,0 @@
-``worktree rm <name>`` now removes each path record that names ``<name>`` when the worktree record of ``<name>`` is gone, as after an ``rm`` that stopped part way. It changes no other config and removes no files. Before, it said git-project had no record of the worktree and left the path record in place.

@@ -31,6 +31,17 @@ ChangeLog
 `Unreleased`_
 -------------
 
+`0.1.2`_ - 2026-10-22
+---------------------
+Changed
+.......
+- The help for ``clone`` and ``set clone`` no longer says an ssh url fails to authenticate. Both now need git-project 0.1.2, which clones an ssh url through git, with your ssh agent and ``~/.ssh/config``.
+
+Fixed
+.....
+- Installing git-project-core-plugins no longer installs ``pytest-console-scripts``. Only the tests use it, and the ``test`` extra already lists it.
+- ``worktree rm <name>`` now removes each path record that names ``<name>`` when the worktree record of ``<name>`` is gone, as after an ``rm`` that stopped part way. It changes no other config and removes no files. Before, it said git-project had no record of the worktree and left the path record in place.
+
 `0.1.1`_ - 2026-10-19
 ---------------------
 Added
@@ -287,7 +298,8 @@ Fixed
   404. Issues named ``unknown/greened``, a leftover from hatch's project
   template, and Documentation misspelled the package name.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.1...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.2...HEAD
+.. _0.1.2: https://github.com/greened/git-project-core-plugins/compare/v0.1.1...v0.1.2
 .. _0.1.1: https://github.com/greened/git-project-core-plugins/compare/v0.1.0...v0.1.1
 .. _0.1.0: https://github.com/greened/git-project-core-plugins/compare/v0.0.33...v0.1.0
 .. _0.0.33: https://github.com/greened/git-project-core-plugins/compare/v0.0.32...v0.0.33
