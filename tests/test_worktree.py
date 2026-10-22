@@ -1718,6 +1718,41 @@ def test_worktree_migrate_existing_worktree_config(flat_clone, script_runner):
     )
 
 
+def test_worktree_rm_after_migrate_removes_the_stale_path_record(
+    flat_clone, script_runner
+):
+    fc = flat_clone
+    top = str(fc.top)
+    old = f"project.worktreepath.{fc.feature}.worktree"
+    _out("-C", top, "config", "project.worktree.feat.path", str(fc.feature))
+    _out(
+        "-C", top, "config", "project.worktree.feat.committish", "user/feature"
+    )
+    _out("-C", top, "config", old, "feat")
+    assert _migrate(script_runner, fc.top, "--apply").success
+    new = fc.top / "user-feature"
+
+    def rm():
+        return script_runner.run(
+            ["git-project", "worktree", "rm", "-f", "feat"],
+            cwd=str(fc.top / "master"),
+        )
+
+    result = rm()
+    assert result.success, result.stdout + result.stderr
+    # A stale record names a path that no worktree owns, so it survives
+    # the rm of the live worktree.
+    assert not new.exists()
+    assert _out("-C", top, "config", old) == "feat\n"
+
+    result = rm()
+    assert result.success, result.stdout + result.stderr
+    assert f"Removed the orphan path record {old[: -len('.worktree')]}" in (
+        result.stdout
+    )
+    assert "=feat\n" not in _out("-C", top, "config", "--list", "--local")
+
+
 def _unpushed(result):
     return [
         line
@@ -3293,6 +3328,164 @@ def test_worktree_rm_multirepo_deletes_a_branch_it_created(
     assert not git.committish_exists("refs/heads/wt-d")
     assert _record(git, "wt-d") == {}
     assert not (workarea / "wt-d").exists()
+
+
+def _path_records(git):
+    """Return each path record on disk, as path -> worktree name."""
+    config = pygit2.Config(str(Path(git.get_git_common_dir()) / "config"))
+    prefix = "project.worktreepath."
+    return {
+        entry.name[len(prefix) : -len(".worktree")]: entry.value
+        for entry in config
+        if entry.name.startswith(prefix) and entry.name.endswith(".worktree")
+    }
+
+
+def _orphan(git, gitproject, project, workarea, path):
+    """Add a worktree, then remove only its worktree record, as an rm that
+    stopped between its two section removals would.
+
+    """
+    _add(git, gitproject, project, path)
+    name = Path(path).name
+    for key in list(_record(git, name)):
+        git.config.rm_items(f"project.worktree.{name}", key)
+    assert _record(git, name) == {}
+    return str(workarea / name)
+
+
+def test_worktree_rm_removes_an_orphan_path_record(
+    git, gitproject, project, capsys
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-keep")
+    path = _orphan(git, gitproject, project, workarea, "../wt-o")
+    assert _path_records(git)[path] == "wt-o"
+    repo = pygit2.Repository(git.get_git_common_dir())
+    refs = sorted(repo.references)
+    worktrees = sorted(repo.list_worktrees())
+
+    command_worktree_rm(git, gitproject, project, _rm_clargs("wt-o"))
+
+    assert (
+        f"Removed the orphan path record project.worktreepath.{path}"
+        in capsys.readouterr().out
+    )
+    # Config only, and another worktree's records stay.
+    assert _path_records(git) == {str(workarea / "wt-keep"): "wt-keep"}
+    assert _record(git, "wt-keep")["path"] == [str(workarea / "wt-keep")]
+    assert (workarea / "wt-o").is_dir()
+    repo = pygit2.Repository(git.get_git_common_dir())
+    assert sorted(repo.references) == refs
+    assert sorted(repo.list_worktrees()) == worktrees
+
+
+def test_worktree_rm_check_keeps_an_orphan_path_record(
+    git, gitproject, project, capsys
+):
+    workarea = _base()
+    path = _orphan(git, gitproject, project, workarea, "../wt-o")
+    before = _repo_state(git)
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-o", check=True)
+    )
+
+    assert (
+        f"Would remove the orphan path record project.worktreepath.{path}"
+        in capsys.readouterr().out
+    )
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_multirepo_refuses_an_orphan_path_record(
+    git, gitproject, project
+):
+    workarea = _base()
+    _orphan(git, gitproject, project, workarea, "../wt-o")
+    before = _repo_state(git)
+
+    with pytest.raises(git_project.GitProjectError) as error:
+        command_worktree_rm(
+            git, gitproject, project, _rm_clargs("wt-o", multirepo="tools")
+        )
+
+    assert "git-project has no record of worktree wt-o" in error.value.message
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_removes_every_orphan_path_record(
+    git, gitproject, project, capsys
+):
+    workarea = _base()
+    path = _orphan(git, gitproject, project, workarea, "../wt-o")
+    other = str(workarea / "wt-o-old")
+    git.config.set_item(f"project.worktreepath.{other}", "worktree", "wt-o")
+    assert _path_records(git) == {path: "wt-o", other: "wt-o"}
+
+    command_worktree_rm(git, gitproject, project, _rm_clargs("wt-o"))
+
+    out = capsys.readouterr().out
+    assert (
+        f"Removed the orphan path record project.worktreepath.{path}, and "
+        f"kept the worktree directory {path}"
+    ) in out
+    assert f"project.worktreepath.{other}," in out
+    assert _path_records(git) == {}
+    assert (workarea / "wt-o").is_dir()
+
+    # Nothing is left to remove, so a second rm reports no record.
+    with pytest.raises(git_project.GitProjectError) as error:
+        command_worktree_rm(git, gitproject, project, _rm_clargs("wt-o"))
+    assert "git-project has no record of worktree wt-o" in error.value.message
+
+
+def test_worktree_rm_keeps_a_live_path_record_that_names_an_orphan(
+    git, gitproject, project
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-live")
+    live = str(workarea / "wt-live")
+    # A hand edit points the live worktree's path record at a gone name.
+    git.config.set_item(f"project.worktreepath.{live}", "worktree", "wt-gone")
+    before = _repo_state(git)
+
+    with pytest.raises(git_project.GitProjectError) as error:
+        command_worktree_rm(git, gitproject, project, _rm_clargs("wt-gone"))
+
+    assert (
+        "git-project has no record of worktree wt-gone" in error.value.message
+    )
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_skips_a_multivalued_path_record(git, gitproject, project):
+    workarea = _base()
+    path = str(workarea / "wt-multi")
+    git.config.add_item(f"project.worktreepath.{path}", "worktree", "wt-a")
+    git.config.add_item(f"project.worktreepath.{path}", "worktree", "wt-b")
+    before = _repo_state(git)
+
+    for name in ("wt-none", "wt-a"):
+        with pytest.raises(git_project.GitProjectError) as error:
+            command_worktree_rm(git, gitproject, project, _rm_clargs(name))
+        assert (
+            f"git-project has no record of worktree {name}"
+            in error.value.message
+        )
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_removes_both_records(git, gitproject, project):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-a")
+    assert _path_records(git) == {str(workarea / "wt-a"): "wt-a"}
+
+    command_worktree_rm(git, gitproject, project, _rm_clargs("wt-a"))
+
+    assert _record(git, "wt-a") == {}
+    assert _path_records(git) == {}
+    assert not (workarea / "wt-a").exists()
 
 
 def _tag(git, name, committish):

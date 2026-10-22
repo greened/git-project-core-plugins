@@ -418,6 +418,32 @@ def _record_values(git, worktree, key):
     )
 
 
+def _path_sections_naming(git, project, name):
+    """Return the section and path of each path record that names worktree
+    name.
+
+    """
+    section = project.get_section()
+    # A live worktree's own path record is never an orphan, even if its
+    # worktree key was edited to name this one.
+    live = set()
+    for ident in ConfigObject.iter_idents(git, section, Worktree.subsection()):
+        worktree = Worktree.get(git, project, ident)
+        project.pop_scope()
+        live.update(_record_values(git, worktree, "path"))
+    sections = []
+    for path in ConfigObject.iter_idents(
+        git, section, Worktree.Path.subsection()
+    ):
+        if path in live:
+            continue
+        record = Worktree.Path.get(git, section, path)
+        # Skip a record with several worktree values rather than guess.
+        if _record_values(git, record, "worktree") == [name]:
+            sections.append((record.get_section(), path))
+    return sections
+
+
 def _plan_worktree_rm(git, project, clargs):
     """Check that worktree rm can go ahead, changing nothing. Return whether
     the worktree's branch stays.
@@ -478,13 +504,37 @@ def _plan_worktree_rm(git, project, clargs):
 
 def command_worktree_rm(git, gitproject, project, clargs):
     """Implement git-project worktree rm."""
+    name = clargs.name
+    # A path record can outlive its worktree record, as when an rm stops
+    # between its two section removals. Remove such a record, config only.
+    # With --multirepo, refuse, since the record that names the set is gone.
+    if getattr(clargs, "multirepo", None) is None and not Worktree.exists(
+        git, project.get_section(), Worktree.subsection(), name
+    ):
+        orphans = _path_sections_naming(git, project, name)
+        if orphans:
+            check = getattr(clargs, "check", False)
+            for section, path in orphans:
+                if check:
+                    print(
+                        f"Would remove the orphan path record {section}, "
+                        f"and keep the worktree directory {path}"
+                    )
+                else:
+                    _rm_config_section(git, section)
+                    print(
+                        f"Removed the orphan path record {section}, and "
+                        f"kept the worktree directory {path}"
+                    )
+            return
+
     keep_branch = _plan_worktree_rm(git, project, clargs)
 
     if getattr(clargs, "check", False):
-        print(f"Would remove worktree {clargs.name}")
+        print(f"Would remove worktree {name}")
         return
 
-    Worktree.get(git, project, clargs.name).rm(
+    Worktree.get(git, project, name).rm(
         keep_branch=keep_branch,
         keep_remote_branch=clargs.keep_remote_branch,
     )
@@ -1975,7 +2025,9 @@ class WorktreePlugin(Plugin):
     branch alone everywhere, and ``--keep-remote-branch`` deletes only the
     local copy. A branch the project configures is never deleted, whatever the
     flags say. Removing a worktree whose branch is unmerged requires ``-f``,
-    unless ``--keep-branch`` means the branch survives anyway.
+    unless ``--keep-branch`` means the branch survives anyway. When <name> has
+    no worktree record, as after an ``rm`` that stopped part way, ``worktree
+    rm`` removes each path record that names <name> and changes nothing else.
 
     With ``--check``, ``worktree add`` and ``worktree rm`` make the checks
     they would make before changing anything, report the result and change
