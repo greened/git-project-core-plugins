@@ -62,8 +62,8 @@ class ClonePlugin(Plugin):
     By itself clone does a basic clone, then sets the project's defaults in
     the new repository. With no <path> it clones into the last component of
     <url> under the current directory, keeping any ``.git`` suffix, where
-    ``git clone`` drops it. It offers no ssh key, so an ssh url fails to
-    authenticate.
+    ``git clone`` drops it. An ssh url clones through git, so it uses your
+    ssh agent and ``~/.ssh/config`` as ``git clone`` does.
 
     Plugins add options to clone. For example, the worktree command adds a
     --worktree option to have clone create an ``umbrella layout``.

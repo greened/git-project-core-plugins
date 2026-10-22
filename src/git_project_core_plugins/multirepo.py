@@ -1331,9 +1331,8 @@ class SetPlugin(Plugin):
     the set file stays a symlink.
 
     ``set clone`` clones each member whose root does not exist, as ``clone
-    --worktree <url> <root>`` does, one at a time. Like ``clone``, it offers
-    no ssh key, so give a member it must clone an https url. A member whose
-    root is already an umbrella cloned from its url is left alone. A root
+    --worktree <url> <root>`` does, one at a time. A member whose root is
+    already an umbrella cloned from its url is left alone. A root
     that exists and is anything else stops the command before anything is
     cloned, so a clone that failed partway is never taken for a finished
     one. A failed clone does not stop the rest. Ctrl-C, SIGTERM and SIGHUP
