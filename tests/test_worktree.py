@@ -3476,6 +3476,104 @@ def test_worktree_rm_skips_a_multivalued_path_record(git, gitproject, project):
     assert _repo_state(git) == before
 
 
+def test_worktree_rm_removes_a_record_with_no_path(
+    git, gitproject, project, capsys
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-keep")
+    _add(git, gitproject, project, "../wt-p")
+    path = str(workarea / "wt-p")
+    # As an rm that stopped part way through the worktree record's keys.
+    git.config.rm_items("project.worktree.wt-p", "path")
+    assert "committish" in _record(git, "wt-p")
+    repo = pygit2.Repository(git.get_git_common_dir())
+    refs = sorted(repo.references)
+    worktrees = sorted(repo.list_worktrees())
+
+    command_worktree_rm(git, gitproject, project, _rm_clargs("wt-p"))
+
+    out = capsys.readouterr().out
+    assert "Removed the worktree record project.worktree.wt-p" in out
+    assert f"Removed the orphan path record project.worktreepath.{path}" in out
+    assert _record(git, "wt-p") == {}
+    assert _path_records(git) == {str(workarea / "wt-keep"): "wt-keep"}
+    # Config only, so the directory, the branch and git's worktree stay.
+    assert (workarea / "wt-p").is_dir()
+    repo = pygit2.Repository(git.get_git_common_dir())
+    assert sorted(repo.references) == refs
+    assert sorted(repo.list_worktrees()) == worktrees
+
+    with pytest.raises(git_project.GitProjectError) as error:
+        command_worktree_rm(git, gitproject, project, _rm_clargs("wt-p"))
+    assert "git-project has no record of worktree wt-p" in error.value.message
+
+
+def test_worktree_rm_check_keeps_a_record_with_no_path(
+    git, gitproject, project, capsys
+):
+    _add(git, gitproject, project, "../wt-p")
+    git.config.rm_items("project.worktree.wt-p", "path")
+    before = _repo_state(git)
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-p", check=True)
+    )
+
+    assert (
+        "Would remove the worktree record project.worktree.wt-p"
+        in capsys.readouterr().out
+    )
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_multirepo_removes_a_record_with_no_path(
+    git, gitproject, project, capsys
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-p", multirepo="tools")
+    git.config.rm_items("project.worktree.wt-p", "path")
+    repo = pygit2.Repository(git.get_git_common_dir())
+    refs = sorted(repo.references)
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-p", multirepo="tools")
+    )
+
+    assert (
+        "Removed the worktree record project.worktree.wt-p"
+        in capsys.readouterr().out
+    )
+    assert _record(git, "wt-p") == {}
+    assert _path_records(git) == {}
+    assert (workarea / "wt-p").is_dir()
+    repo = pygit2.Repository(git.get_git_common_dir())
+    assert sorted(repo.references) == refs
+
+
+@pytest.mark.parametrize("multirepo", [None, "other"])
+def test_worktree_rm_multirepo_refuses_a_record_with_no_path(
+    git, gitproject, project, multirepo
+):
+    _add(git, gitproject, project, "../wt-p", multirepo="tools")
+    git.config.rm_items("project.worktree.wt-p", "path")
+    if multirepo is None:
+        git.config.rm_items("project.worktree.wt-p", "multirepo")
+    else:
+        git.config.set_item("project.worktree.wt-p", "multirepo", multirepo)
+    before = _repo_state(git)
+
+    with pytest.raises(git_project.GitProjectError) as error:
+        command_worktree_rm(
+            git, gitproject, project, _rm_clargs("wt-p", multirepo="tools")
+        )
+
+    assert (
+        "has no path and does not name multirepo set tools"
+        in error.value.message
+    )
+    assert _repo_state(git) == before
+
+
 def test_worktree_rm_removes_both_records(git, gitproject, project):
     workarea = _base()
     _add(git, gitproject, project, "../wt-a")

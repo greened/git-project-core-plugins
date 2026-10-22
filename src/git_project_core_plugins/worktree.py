@@ -519,32 +519,66 @@ def _plan_worktree_rm(git, project, clargs):
 def command_worktree_rm(git, gitproject, project, clargs):
     """Implement git-project worktree rm."""
     name = clargs.name
+    multirepo = getattr(clargs, "multirepo", None)
+    check = getattr(clargs, "check", False)
+    record = None
+    orphans = []
     # A path record can outlive its worktree record, as when an rm stops
     # between its two section removals. Remove such a record, config only.
     # With --multirepo, refuse, since the record that names the set is gone.
-    if getattr(clargs, "multirepo", None) is None and not Worktree.exists(
+    if not Worktree.exists(
         git, project.get_section(), Worktree.subsection(), name
     ):
-        orphans = _path_sections_naming(git, project, name)
-        if orphans:
-            check = getattr(clargs, "check", False)
-            for section, path in orphans:
-                if check:
-                    print(
-                        f"Would remove the orphan path record {section}, "
-                        f"and keep the worktree directory {path}"
-                    )
-                else:
-                    _rm_config_section(git, section)
-                    print(
-                        f"Removed the orphan path record {section}, and "
-                        f"kept the worktree directory {path}"
-                    )
-            return
+        if multirepo is None:
+            orphans = _path_sections_naming(git, project, name)
+    else:
+        worktree = Worktree.get(git, project, name)
+        project.pop_scope()
+        # An rm that stops partway through the worktree record's keys can
+        # leave a record with no path. Such a record cannot vouch for a
+        # directory, so remove the config only. With --multirepo, the
+        # record must still name the set, as for any other rm.
+        if not _record_values(git, worktree, "path"):
+            if multirepo is not None and _record_values(
+                git, worktree, "multirepo"
+            ) != [multirepo]:
+                raise GitProjectError(
+                    f"The record of worktree {name} has no path and does "
+                    f"not name multirepo set {multirepo}. Run worktree rm "
+                    f"{name} in this repository, outside multirepo, to "
+                    f"remove it"
+                )
+            record = worktree.get_section()
+            orphans = _path_sections_naming(git, project, name)
+    if record is not None or orphans:
+        if record is not None:
+            if check:
+                print(
+                    f"Would remove the worktree record {record}, which has "
+                    f"no path"
+                )
+            else:
+                _rm_config_section(git, record)
+                print(
+                    f"Removed the worktree record {record}, which had no path"
+                )
+        for section, path in orphans:
+            if check:
+                print(
+                    f"Would remove the orphan path record {section}, "
+                    f"and keep the worktree directory {path}"
+                )
+            else:
+                _rm_config_section(git, section)
+                print(
+                    f"Removed the orphan path record {section}, and "
+                    f"kept the worktree directory {path}"
+                )
+        return
 
     keep_branch = _plan_worktree_rm(git, project, clargs)
 
-    if getattr(clargs, "check", False):
+    if check:
         print(f"Would remove worktree {name}")
         return
 
@@ -2042,6 +2076,8 @@ class WorktreePlugin(Plugin):
     unless ``--keep-branch`` means the branch survives anyway. When <name> has
     no worktree record, as after an ``rm`` that stopped part way, ``worktree
     rm`` removes each path record that names <name> and changes nothing else.
+    When the worktree record of <name> has no path, it removes that record and
+    each path record that names <name>, and again changes nothing else.
 
     With ``--check``, ``worktree add`` and ``worktree rm`` make the checks
     they would make before changing anything, report the result and change
