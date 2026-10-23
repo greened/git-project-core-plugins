@@ -1,0 +1,1 @@
+``Worktree.rm`` now leaves a branch alone on every remote when the local branch is gone, since a remote may hold the only copy of its commits. Before, it raised ``NotFoundError`` or deleted the remote copies, depending on the project's other branches.

@@ -762,12 +762,16 @@ class Worktree(ScopedConfigObject):
 
         project = Project.get(self._git, self._project_section)
 
-        if not keep_branch:
+        # With the local branch gone, the remote branch may hold the only copy
+        # of the commits.
+        if not keep_branch and self._git.committish_exists(
+            self._git.branch_name_to_refname(committish)
+        ):
             for branch in project.iterbranches():
                 if branch not in self._git.iterbranches():
                     continue
-                branch_name = self._git.committish_to_refname(branch)
-                committish_name = self._git.committish_to_refname(committish)
+                branch_name = self._git.branch_name_to_refname(branch)
+                committish_name = self._git.branch_name_to_refname(committish)
                 if branch_name == committish_name:
                     break
             else:

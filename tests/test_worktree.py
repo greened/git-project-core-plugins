@@ -3330,6 +3330,30 @@ def test_worktree_rm_multirepo_deletes_a_branch_it_created(
     assert not (workarea / "wt-d").exists()
 
 
+def test_worktree_rm_keeps_the_remote_branch_when_local_is_gone(
+    git, gitproject, project, monkeypatch
+):
+    # This test pushes, so it reaches a pre-push hook. Ignore the user's git
+    # configuration to keep it hermetic.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+    _add(git, gitproject, project, "../wt-p")
+    git_project.capture_command("git push origin wt-p:refs/heads/wt-p")
+    assert git.remote_branch_exists("wt-p", "origin")
+    # Deleted by hand, as a user might outside git-project.
+    repo = pygit2.Repository(git.get_git_common_dir())
+    repo.references.delete("refs/heads/wt-p")
+
+    # Worktree.rm directly, since the rm command stops before this case.
+    worktree = Worktree.get(git, project, "wt-p")
+    project.pop_scope()
+    worktree.rm()
+
+    assert _record(git, "wt-p") == {}
+    assert git.remote_branch_exists("wt-p", "origin")
+
+
 def _path_records(git):
     """Return each path record on disk, as path -> worktree name."""
     config = pygit2.Config(str(Path(git.get_git_common_dir()) / "config"))
