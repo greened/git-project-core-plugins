@@ -3534,6 +3534,93 @@ def test_worktree_rm_check_changes_nothing(git, gitproject, project):
     assert _repo_state(git) == before
 
 
+def _drop_branch(git, name):
+    """Delete a branch ref by hand, as a user might outside git-project."""
+    repo = pygit2.Repository(git.get_git_common_dir())
+    repo.references.delete(f"refs/heads/{name}")
+
+
+def test_worktree_rm_force_removes_a_worktree_whose_branch_is_gone(
+    git, gitproject, project
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-g")
+    _drop_branch(git, "wt-g")
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-g", force=True)
+    )
+
+    assert _record(git, "wt-g") == {}
+    assert _path_records(git) == {}
+    assert not (workarea / "wt-g").exists()
+    repo = pygit2.Repository(git.get_git_common_dir())
+    assert "wt-g" not in repo.list_worktrees()
+
+
+def test_worktree_rm_force_keeps_the_remote_branch_when_local_is_gone(
+    git, gitproject, project, monkeypatch, capsys
+):
+    # This test pushes, so it reaches a pre-push hook. Ignore the user's git
+    # configuration to keep it hermetic.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+    _add(git, gitproject, project, "../wt-p")
+    # The remote copy may now hold the only copy of the commits.
+    git_project.capture_command("git push origin wt-p:refs/heads/wt-p")
+    assert git.remote_branch_exists("wt-p", "origin")
+    _drop_branch(git, "wt-p")
+    capsys.readouterr()
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-p", force=True)
+    )
+
+    assert (
+        "Branch wt-p no longer exists locally, so any copies on remotes are "
+        "kept" in capsys.readouterr().out
+    )
+    assert _record(git, "wt-p") == {}
+    assert git.remote_branch_exists("wt-p", "origin")
+
+
+def test_worktree_rm_check_force_says_remote_copies_would_be_kept(
+    git, gitproject, project, capsys
+):
+    _add(git, gitproject, project, "../wt-c")
+    _drop_branch(git, "wt-c")
+    before = _repo_state(git)
+    capsys.readouterr()
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-c", force=True, check=True)
+    )
+
+    assert (
+        "Branch wt-c no longer exists locally, so any copies on remotes "
+        "would be kept" in capsys.readouterr().out
+    )
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_refuses_a_worktree_whose_branch_is_gone(
+    git, gitproject, project
+):
+    _add(git, gitproject, project, "../wt-g")
+    _drop_branch(git, "wt-g")
+    before = _repo_state(git)
+
+    with pytest.raises(
+        git_project.GitProjectError,
+        match="Worktree branch wt-g does not exist, "
+        "use -f or --keep-branch to remove the worktree",
+    ):
+        command_worktree_rm(git, gitproject, project, _rm_clargs("wt-g"))
+
+    assert _repo_state(git) == before
+
+
 def test_worktree_menu_hints(git, git_project_runner, script_runner):
     workarea = git.get_working_copy_root()
     os.chdir(workarea)

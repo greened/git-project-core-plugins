@@ -481,10 +481,24 @@ def _plan_worktree_rm(git, project, clargs):
     # --keep-remote-branch still deletes the local branch, so it still applies.
     # The record holds the branch name, and a tag of that name would win.
     refname = git.branch_name_to_refname(worktree.committish)
+    if not keep_branch and not git.committish_exists(refname):
+        if not clargs.force:
+            raise GitProjectError(
+                f"Worktree branch {worktree.committish} does not exist, "
+                "use -f or --keep-branch to remove the worktree"
+            )
+        # The remote branch may now hold the only copy of the commits.
+        keep_branch = True
+        check = getattr(clargs, "check", False)
+        kept = "would be kept" if check else "are kept"
+        print(
+            f"Branch {worktree.committish} no longer exists locally, so any "
+            f"copies on remotes {kept}"
+        )
     if (
         not keep_branch
-        and not project.branch_is_merged(refname)
         and not clargs.force
+        and not project.branch_is_merged(refname)
     ):
         raise GitProjectError(
             f"Worktree branch {worktree.committish} is not merged, use -f to force"
