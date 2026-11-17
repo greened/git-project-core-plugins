@@ -1,1 +1,0 @@
-``worktree rm -f <name>`` now removes a worktree whose branch is gone, and leaves the branch alone on every remote, saying so. Without ``-f`` or ``--keep-branch`` it fails with a one-line error that names the branch. Before, both stopped with a traceback.

@@ -31,6 +31,14 @@ ChangeLog
 `Unreleased`_
 -------------
 
+`0.1.3`_ - 2026-11-17
+---------------------
+Fixed
+.....
+- ``Worktree.rm`` now leaves a branch alone on every remote when the local branch is gone, since a remote may hold the only copy of its commits. Before, it raised ``NotFoundError`` or deleted the remote copies, depending on the project's other branches.
+- ``worktree rm -f <name>`` now removes a worktree whose branch is gone, and leaves the branch alone on every remote, saying so. Without ``-f`` or ``--keep-branch`` it fails with a one-line error that names the branch. Before, both stopped with a traceback.
+- ``worktree rm <name>`` now removes the worktree record of ``<name>`` when that record has no path, as after an ``rm`` that stopped part way through the record's keys, along with each path record that names ``<name>``. It changes no other config and removes no files or branches. Before, it failed with a ``TypeError`` and left both records in place. With ``--multirepo`` it does so only when the record still names the set, and otherwise stops with an error.
+
 `0.1.2`_ - 2026-10-22
 ---------------------
 Changed
@@ -298,7 +306,8 @@ Fixed
   404. Issues named ``unknown/greened``, a leftover from hatch's project
   template, and Documentation misspelled the package name.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.2...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.3...HEAD
+.. _0.1.3: https://github.com/greened/git-project-core-plugins/compare/v0.1.2...v0.1.3
 .. _0.1.2: https://github.com/greened/git-project-core-plugins/compare/v0.1.1...v0.1.2
 .. _0.1.1: https://github.com/greened/git-project-core-plugins/compare/v0.1.0...v0.1.1
 .. _0.1.0: https://github.com/greened/git-project-core-plugins/compare/v0.0.33...v0.1.0
