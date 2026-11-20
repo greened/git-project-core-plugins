@@ -3598,6 +3598,172 @@ def test_worktree_rm_multirepo_refuses_a_record_with_no_path(
     assert _repo_state(git) == before
 
 
+@pytest.mark.parametrize(
+    "option, note",
+    [
+        (
+            {"force": True},
+            (
+                "The record of worktree wt-c has no branch, so all branches "
+                "are kept\n"
+            ),
+        ),
+        ({"keep_branch": True}, ""),
+    ],
+)
+def test_worktree_rm_removes_a_record_with_no_committish(
+    git, gitproject, project, capsys, option, note
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-keep")
+    _add(git, gitproject, project, "../wt-c")
+    git.config.rm_items("project.worktree.wt-c", "committish")
+    assert "path" in _record(git, "wt-c")
+    repo = pygit2.Repository(git.get_git_common_dir())
+    refs = sorted(repo.references)
+
+    command_worktree_rm(git, gitproject, project, _rm_clargs("wt-c", **option))
+
+    out = capsys.readouterr().out
+    assert ("has no branch" in out) == bool(note)
+    assert note in out
+    assert _record(git, "wt-c") == {}
+    assert _path_records(git) == {str(workarea / "wt-keep"): "wt-keep"}
+    assert not (workarea / "wt-c").exists()
+    repo = pygit2.Repository(git.get_git_common_dir())
+    assert sorted(repo.list_worktrees()) == ["wt-keep"]
+    assert sorted(repo.references) == refs
+    assert git.committish_exists("refs/heads/wt-c")
+
+
+def test_worktree_rm_refuses_a_record_with_no_committish(
+    git, gitproject, project
+):
+    _add(git, gitproject, project, "../wt-c")
+    git.config.rm_items("project.worktree.wt-c", "committish")
+    before = _repo_state(git)
+
+    with pytest.raises(git_project.GitProjectError) as error:
+        command_worktree_rm(git, gitproject, project, _rm_clargs("wt-c"))
+
+    assert error.value.message.endswith(
+        "The record of worktree wt-c has no branch, use -f or --keep-branch "
+        "to remove the worktree"
+    )
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_removes_a_record_with_no_committish_or_directory(
+    git, gitproject, project, capsys
+):
+    workarea = _base()
+    _add(git, gitproject, project, "../wt-c")
+    git.config.rm_items("project.worktree.wt-c", "committish")
+    shutil.rmtree(workarea / "wt-c")
+    repo = pygit2.Repository(git.get_git_common_dir())
+    refs = sorted(repo.references)
+
+    command_worktree_rm(git, gitproject, project, _rm_clargs("wt-c"))
+
+    assert (
+        "The record of worktree wt-c has no branch, so all branches are kept"
+        in capsys.readouterr().out
+    )
+    assert _record(git, "wt-c") == {}
+    assert _path_records(git) == {}
+    repo = pygit2.Repository(git.get_git_common_dir())
+    assert repo.list_worktrees() == []
+    assert sorted(repo.references) == refs
+
+
+@pytest.mark.parametrize("drop_committish", [False, True])
+def test_worktree_rm_refuses_a_moved_worktree(
+    git, gitproject, project, drop_committish
+):
+    _add(git, gitproject, project, "../wt-m")
+    moved = _base() / "wt-moved"
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(git.get_working_copy_root()),
+            "worktree",
+            "move",
+            str(_base() / "wt-m"),
+            str(moved),
+        ],
+        check=True,
+    )
+    if drop_committish:
+        git.config.rm_items("project.worktree.wt-m", "committish")
+    before = _repo_state(git)
+
+    with pytest.raises(
+        git_project.GitProjectError,
+        match=r"git's worktree wt-m is at .*, not at the recorded path",
+    ):
+        command_worktree_rm(
+            git, gitproject, project, _rm_clargs("wt-m", force=True)
+        )
+
+    assert _repo_state(git) == before
+    assert moved.is_dir()
+
+
+def test_worktree_rm_refuses_a_relative_record_path(git, gitproject, project):
+    _add(git, gitproject, project, "../wt-r")
+    git.config.set_item("project.worktree.wt-r", "path", "../wt-r")
+    before = _repo_state(git)
+
+    with pytest.raises(
+        git_project.GitProjectError, match=r"has the relative path \.\./wt-r"
+    ):
+        command_worktree_rm(
+            git, gitproject, project, _rm_clargs("wt-r", force=True)
+        )
+
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_multirepo_refuses_a_record_with_no_committish(
+    git, gitproject, project
+):
+    _add(git, gitproject, project, "../wt-c", multirepo="tools")
+    git.config.rm_items("project.worktree.wt-c", "committish")
+    before = _repo_state(git)
+
+    with pytest.raises(git_project.GitProjectError) as error:
+        command_worktree_rm(
+            git, gitproject, project, _rm_clargs("wt-c", multirepo="tools")
+        )
+
+    assert error.value.message.endswith(
+        "The record of worktree wt-c has no branch, use -f or --keep-branch "
+        "to remove the worktree"
+    )
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_check_keeps_a_record_with_no_committish(
+    git, gitproject, project, capsys
+):
+    _add(git, gitproject, project, "../wt-c")
+    git.config.rm_items("project.worktree.wt-c", "committish")
+    before = _repo_state(git)
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-c", force=True, check=True)
+    )
+
+    out = capsys.readouterr().out
+    assert (
+        "The record of worktree wt-c has no branch, so all branches "
+        "would be kept" in out
+    )
+    assert "Would remove worktree wt-c" in out
+    assert _repo_state(git) == before
+
+
 def test_worktree_rm_removes_both_records(git, gitproject, project):
     workarea = _base()
     _add(git, gitproject, project, "../wt-a")

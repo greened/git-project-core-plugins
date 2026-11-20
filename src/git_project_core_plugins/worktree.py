@@ -444,6 +444,24 @@ def _path_sections_naming(git, project, name):
     return sections
 
 
+def _moved_worktree_path(git, worktree):
+    """Return the path of git's worktree of the same name as worktree when a
+    directory is there and it is not the recorded path, as after a git
+    worktree move. Return None otherwise.
+
+    """
+    ident = worktree.get_ident()
+    repo = pygit2.Repository(git.get_git_common_dir())
+    if ident not in repo.list_worktrees():
+        return None
+    path = repo.lookup_worktree(ident).path
+    if not os.path.lexists(path):
+        return None
+    if os.path.realpath(path) == os.path.realpath(worktree.path):
+        return None
+    return path
+
+
 def _plan_worktree_rm(git, project, clargs):
     """Check that worktree rm can go ahead, changing nothing. Return whether
     the worktree's branch stays.
@@ -456,6 +474,23 @@ def _plan_worktree_rm(git, project, clargs):
         raise GitProjectError(f"git-project has no record of worktree {name}")
     worktree = Worktree.get(git, project, name)
     project.pop_scope()
+
+    # A relative path would resolve against the current directory.
+    if worktree.path and not os.path.isabs(worktree.path):
+        raise GitProjectError(
+            f"The record of worktree {name} has the relative path "
+            f"{worktree.path}, set it to an absolute path to remove the "
+            "worktree"
+        )
+    # Worktree.rm removes the recorded path and prunes git's worktree of the
+    # same name, so the two must agree.
+    moved = _moved_worktree_path(git, worktree)
+    if moved:
+        raise GitProjectError(
+            f"git's worktree {worktree.get_ident()} is at {moved}, not at "
+            f"the recorded path {worktree.path}, so worktree {name} cannot "
+            "be removed"
+        )
 
     keep_branch = clargs.keep_branch
     multirepo = getattr(clargs, "multirepo", None)
@@ -475,12 +510,33 @@ def _plan_worktree_rm(git, project, clargs):
                 f"{', '.join(created)}, not true"
             )
 
+    # A record can lack a committish, as after a hand edit. Then rm cannot
+    # tell which branch to delete, so it keeps them all, as when the branch
+    # is gone. -f guards only uncommitted work in the directory.
+    if not keep_branch and not _record_values(git, worktree, "committish"):
+        if not clargs.force and os.path.lexists(worktree.path):
+            raise GitProjectError(
+                f"The record of worktree {name} has no branch, use -f or "
+                "--keep-branch to remove the worktree"
+            )
+        keep_branch = True
+        check = getattr(clargs, "check", False)
+        kept = "would be kept" if check else "are kept"
+        print(
+            f"The record of worktree {name} has no branch, so all branches "
+            f"{kept}"
+        )
+
     # The merge check protects the branch's commits, so it applies only when we
     # are going to delete the branch.  --keep-branch leaves the branch in place
     # both locally and on remotes, so the merge state cannot cost anything.
     # --keep-remote-branch still deletes the local branch, so it still applies.
     # The record holds the branch name, and a tag of that name would win.
-    refname = git.branch_name_to_refname(worktree.committish)
+    refname = (
+        None
+        if keep_branch
+        else git.branch_name_to_refname(worktree.committish)
+    )
     if not keep_branch and not git.committish_exists(refname):
         if not clargs.force:
             raise GitProjectError(
@@ -2081,7 +2137,11 @@ class WorktreePlugin(Plugin):
     no worktree record, as after an ``rm`` that stopped part way, ``worktree
     rm`` removes each path record that names <name> and changes nothing else.
     When the worktree record of <name> has no path, it removes that record and
-    each path record that names <name>, and again changes nothing else.
+    each path record that names <name>, and again changes nothing else. When
+    the record has a path but no branch, ``worktree rm`` removes the worktree
+    and keeps every branch. While the directory exists, it needs ``-f`` or
+    ``--keep-branch``, unless ``--multirepo`` already keeps the branch.
+    ``worktree rm`` refuses a worktree moved with ``git worktree move``.
 
     With ``--check``, ``worktree add`` and ``worktree rm`` make the checks
     they would make before changing anything, report the result and change
@@ -2436,7 +2496,7 @@ class WorktreePlugin(Plugin):
             "-f",
             "--force",
             action="store_true",
-            help="Remove even if branch is not merged",
+            help="Remove even if the branch is not merged or is missing",
         )
         worktree_rm_parser.add_argument(
             "--keep-branch",
