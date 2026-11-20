@@ -538,7 +538,9 @@ def _plan_worktree_rm(git, project, clargs):
         else git.branch_name_to_refname(worktree.committish)
     )
     if not keep_branch and not git.committish_exists(refname):
-        if not clargs.force:
+        # The branch is gone, so -f guards only uncommitted work in the
+        # directory.
+        if not clargs.force and os.path.lexists(worktree.path):
             raise GitProjectError(
                 f"Worktree branch {worktree.committish} does not exist, "
                 "use -f or --keep-branch to remove the worktree"
@@ -814,7 +816,10 @@ class Worktree(ScopedConfigObject):
             if tree:
                 shutil.rmtree(tree, ignore_errors=True)
 
-        self._git.prune_worktree(ident)
+        # A plain git worktree remove prunes git's record itself.
+        repo = pygit2.Repository(self._git.get_git_common_dir())
+        if ident in repo.list_worktrees():
+            self._git.prune_worktree(ident)
 
         project = Project.get(self._git, self._project_section)
 

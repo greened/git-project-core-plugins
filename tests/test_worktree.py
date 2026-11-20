@@ -3909,6 +3909,128 @@ def test_worktree_rm_refuses_a_worktree_whose_branch_is_gone(
     assert _repo_state(git) == before
 
 
+def test_worktree_rm_clears_records_after_plain_git_removes_all(
+    git_project_runner, remote_repository
+):
+    u = _umbrella(git_project_runner, remote_repository)
+    git_project_runner.run(
+        ".*", "", "worktree", "add", "-b", "X", "X", "master"
+    )
+    config = u.store / "config"
+    assert any(
+        ".worktree.X." in entry.name for entry in pygit2.Config(str(config))
+    )
+    subprocess.run(
+        ["git", "-C", str(u.master), "worktree", "remove", "--force", "../X"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(u.master), "branch", "-q", "-D", "X"], check=True
+    )
+
+    git_project_runner.run(
+        r"\ABranch X no longer exists locally, so any copies on remotes are "
+        r"kept\n\Z",
+        "",
+        "worktree",
+        "rm",
+        "X",
+    )
+
+    entries = {entry.name: entry.value for entry in pygit2.Config(str(config))}
+    assert not [name for name in entries if ".worktree.X." in name]
+    assert not [
+        name
+        for name, value in entries.items()
+        if ".worktreepath." in name and value == "X"
+    ]
+
+
+def _plain_git(git, *args):
+    """Run plain git in the repository, as a user might outside git-project."""
+    subprocess.run(
+        ["git", "-C", str(git.get_working_copy_root()), *args], check=True
+    )
+
+
+def _git_worktree_remove(git, path):
+    """Remove a worktree with plain git, as a user might outside git-project."""
+    _plain_git(git, "worktree", "remove", "--force", str(path))
+
+
+def test_worktree_rm_check_says_remote_copies_would_be_kept_when_all_gone(
+    git, gitproject, project, capsys
+):
+    _add(git, gitproject, project, "../wt-c")
+    _git_worktree_remove(git, _base() / "wt-c")
+    _drop_branch(git, "wt-c")
+    before = _repo_state(git)
+    capsys.readouterr()
+
+    command_worktree_rm(
+        git, gitproject, project, _rm_clargs("wt-c", check=True)
+    )
+
+    assert (
+        "Branch wt-c no longer exists locally, so any copies on remotes "
+        "would be kept" in capsys.readouterr().out
+    )
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_removes_a_merged_branch_after_plain_git_removes_its_dir(
+    git, gitproject, project
+):
+    _add(git, gitproject, project, "../wt-d")
+    _git_worktree_remove(git, _base() / "wt-d")
+
+    command_worktree_rm(git, gitproject, project, _rm_clargs("wt-d"))
+
+    assert _record(git, "wt-d") == {}
+    assert _path_records(git) == {}
+    assert not git.committish_exists(git.branch_name_to_refname("wt-d"))
+
+
+def test_worktree_rm_refuses_an_unmerged_branch_after_its_dir_is_gone(
+    git, gitproject, project
+):
+    _add(git, gitproject, project, "../wt-u")
+    repo = pygit2.Repository(str(_base() / "wt-u"))
+    create_commit(repo, "refs/heads/wt-u", [repo.head.target], "Unmerged")
+    _git_worktree_remove(git, _base() / "wt-u")
+    before = _repo_state(git)
+
+    with pytest.raises(
+        git_project.GitProjectError,
+        match="Worktree branch wt-u is not merged, use -f to force",
+    ):
+        command_worktree_rm(git, gitproject, project, _rm_clargs("wt-u"))
+
+    assert _repo_state(git) == before
+
+
+def test_worktree_rm_refuses_a_moved_worktree_whose_branch_is_gone(
+    git, gitproject, project
+):
+    _add(git, gitproject, project, "../wt-m")
+    moved = _base() / "wt-moved"
+    _plain_git(git, "worktree", "move", str(_base() / "wt-m"), str(moved))
+    subprocess.run(
+        ["git", "-C", str(moved), "switch", "-q", "--detach"], check=True
+    )
+    _drop_branch(git, "wt-m")
+    before = _repo_state(git)
+
+    with pytest.raises(
+        git_project.GitProjectError,
+        match=r"git's worktree wt-m is at .*, not at the recorded path",
+    ):
+        command_worktree_rm(git, gitproject, project, _rm_clargs("wt-m"))
+
+    assert _repo_state(git) == before
+    assert moved.is_dir()
+
+
 def test_worktree_menu_hints(git, git_project_runner, script_runner):
     workarea = git.get_working_copy_root()
     os.chdir(workarea)
