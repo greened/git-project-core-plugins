@@ -31,6 +31,15 @@ ChangeLog
 `Unreleased`_
 -------------
 
+`0.1.4`_ - 2026-11-21
+---------------------
+Fixed
+.....
+- ``clone --worktree`` of an empty repository now adds the main worktree on an unborn branch, the one the remote's HEAD names. Before, it repeated a prompt for a main branch that no answer could match. A ``clone --worktree`` that fails partway now removes what it made. A ``clone --worktree`` into a directory that already has a ``.git`` now fails, where before it overwrote the ``.git``. With no input to read, the prompt for a main branch now fails with a one-line error rather than a traceback.
+- ``clone --worktree`` and ``init --worktree`` now check out a main branch with a ``/`` in its name, such as ``release/1``, in the main worktree. Before, they created a new branch named after the last part of the name, ``1``, and checked that out.
+- ``worktree rm <name>`` now finishes for a worktree that ``git worktree remove`` has already removed. Before, it removed the records, then stopped with a ``NotFoundError`` and left the branch. When the branch is gone too, it no longer needs ``-f``, and it says that any copies of the branch on remotes are kept.
+- ``worktree rm <name>`` now removes a worktree whose record has a path but no branch, such as one edited by hand, and keeps every branch. While the worktree's directory exists, it needs ``-f`` or ``--keep-branch``. Before, it stopped with an ``AttributeError``. ``worktree rm`` now refuses a worktree moved with ``git worktree move``, before it changes anything. Before, it removed the records and then failed, leaving the moved directory.
+
 `0.1.3`_ - 2026-11-17
 ---------------------
 Fixed
@@ -306,7 +315,8 @@ Fixed
   404. Issues named ``unknown/greened``, a leftover from hatch's project
   template, and Documentation misspelled the package name.
 
-.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.3...HEAD
+.. _Unreleased: https://github.com/greened/git-project-core-plugins/compare/v0.1.4...HEAD
+.. _0.1.4: https://github.com/greened/git-project-core-plugins/compare/v0.1.3...v0.1.4
 .. _0.1.3: https://github.com/greened/git-project-core-plugins/compare/v0.1.2...v0.1.3
 .. _0.1.2: https://github.com/greened/git-project-core-plugins/compare/v0.1.1...v0.1.2
 .. _0.1.1: https://github.com/greened/git-project-core-plugins/compare/v0.1.0...v0.1.1

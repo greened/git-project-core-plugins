@@ -1,1 +1,0 @@
-``clone --worktree`` and ``init --worktree`` now check out a main branch with a ``/`` in its name, such as ``release/1``, in the main worktree. Before, they created a new branch named after the last part of the name, ``1``, and checked that out.

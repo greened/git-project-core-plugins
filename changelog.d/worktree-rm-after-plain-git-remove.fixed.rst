@@ -1,1 +1,0 @@
-``worktree rm <name>`` now finishes for a worktree that ``git worktree remove`` has already removed. Before, it removed the records, then stopped with a ``NotFoundError`` and left the branch. When the branch is gone too, it no longer needs ``-f``, and it says that any copies of the branch on remotes are kept.
