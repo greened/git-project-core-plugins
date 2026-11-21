@@ -220,14 +220,17 @@ class _AddPlan:
     create_branch: bool
 
 
-def _plan_worktree_add(git, project, clargs):
+def _plan_worktree_add(git, project, clargs, path_branch=None):
     """Work out what worktree add will do, changing nothing. Raise
     GitProjectError for each reason the add would fail that can be seen now.
+    A path_branch replaces the branch named after the path.
 
     """
     name, newbranch, path, refname = get_name_branch_path_and_refname(
         git, project, clargs
     )
+    if path_branch is not None:
+        newbranch = path_branch
 
     branch = git.refname_to_branch_name(refname)
     branch_point = refname
@@ -2709,7 +2712,10 @@ class WorktreePlugin(Plugin):
         clargs.committish = main_branch
         clargs.path = str(main_path)
 
-        command_worktree_add(p_git, p_gitproject, p_project, clargs)
+        # From an absolute path, worktree add would name a new branch after
+        # only the last component of a main branch such as release/1.
+        plan = _plan_worktree_add(p_git, p_project, clargs, main_branch)
+        _apply_worktree_add(p_git, p_project, plan)
 
     def modify_arguments(
         self, git, gitproject, project, parser_manager, plugin_manager

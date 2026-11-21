@@ -558,6 +558,59 @@ def test_worktree_clone_dotdot_path_keeps_existing_repository(
     assert not (tmp_path / "nope").exists()
 
 
+@pytest.fixture(scope="function")
+def slash_remote(tmp_path):
+    """A bare repository whose only branch, release/1, has a '/'."""
+    path = tmp_path / "slash.git"
+    repo = pygit2.init_repository(
+        str(path), bare=True, initial_head="release/1"
+    )
+    create_commit(repo, "refs/heads/release/1", [], "Hello")
+    return path
+
+
+def _check_slash_main_worktree(umbrella, store):
+    """Check that umbrella/release/1 is the main worktree, on release/1."""
+    main = pygit2.Repository(str(umbrella / "release" / "1"))
+    assert main.head.name == "refs/heads/release/1"
+
+    repo = pygit2.Repository(str(umbrella / store))
+    assert sorted(repo.branches.local) == ["release/1"]
+    assert repo.list_worktrees() == ["1"]
+
+    config = repo.config
+    path = str(umbrella / "release" / "1")
+    assert config["project.worktree.1.path"] == path
+    assert config["project.worktree.1.committish"] == "release/1"
+    assert "project.worktree.1.branchcreated" not in config
+
+
+@pytest.mark.parametrize("bare", [False, True])
+def test_worktree_clone_slash_main_branch(slash_remote, tmp_path, bare):
+    umbrella = tmp_path / "umbrella"
+    result = _run_git_project(
+        tmp_path,
+        "clone",
+        "--worktree",
+        *(["--bare"] if bare else []),
+        f"file://{slash_remote}",
+        str(umbrella),
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    _check_slash_main_worktree(umbrella, ".slash.git")
+
+
+def test_worktree_init_slash_main_branch(slash_remote, tmp_path):
+    workarea = tmp_path / "workarea"
+    pygit2.clone_repository(f"file://{slash_remote}", str(workarea))
+
+    result = _run_git_project(workarea, "init", "--worktree")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    _check_slash_main_worktree(workarea, ".slash.git")
+
+
 def test_choose_main_branch_no_branches(tmp_path, monkeypatch):
     pygit2.init_repository(str(tmp_path / "repo"))
     monkeypatch.chdir(tmp_path / "repo")
