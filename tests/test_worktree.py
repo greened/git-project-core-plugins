@@ -316,6 +316,267 @@ def test_worktree_clone_umbrella_is_discoverable(
     assert git.is_bare_repository()
 
 
+def _run_git_project(cwd, *args):
+    """Run git-project in a child process with stdin closed. The timeout
+    turns a looping prompt into a failure rather than a hang.
+
+    """
+    return subprocess.run(
+        [str(Path(sys.executable).with_name("git-project")), *args],
+        cwd=str(cwd),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+
+def _isolate_global_config(tmp_path, monkeypatch, default_branch=None):
+    """Point libgit2's global config into tmp_path, with init.defaultBranch
+    set to default_branch if it is given.
+
+    """
+    # libgit2 reads the global config from HOME and XDG_CONFIG_HOME, not
+    # GIT_CONFIG_GLOBAL.
+    home = tmp_path / "home"
+    home.mkdir()
+    if default_branch:
+        (home / ".gitconfig").write_text(
+            f"[init]\n\tdefaultBranch = {default_branch}\n"
+        )
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+
+def _fail_git_worktree_add(tmp_path, monkeypatch):
+    """Put a git first on PATH whose worktree add makes its last argument as
+    a directory and then fails as a git without --orphan does. It passes
+    every other command to the real git.
+
+    """
+    real = shutil.which("git")
+    bindir = tmp_path / "fakebin"
+    bindir.mkdir()
+    fake = bindir / "git"
+    fake.write_text(
+        "#!/bin/sh\n"
+        'case " $* " in *" worktree add "*) ;; *) exec '
+        f"{shlex.quote(real)}"
+        ' "$@" ;; esac\n'
+        'for last; do :; done\nmkdir -p "$last"\n'
+        'echo "error: unknown option \\`orphan\'" >&2\n'
+        "echo 'usage: git worktree add' >&2\n"
+        "exit 129\n"
+    )
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+
+
+def _make_empty_remote(tmp_path, head):
+    """Make a bare repository with no commits whose HEAD names head."""
+    path = tmp_path / "empty.git"
+    pygit2.init_repository(str(path), bare=True, initial_head=head)
+    return path
+
+
+@pytest.fixture(scope="function")
+def empty_remote(tmp_path):
+    """A bare repository with no commits. Its HEAD names a branch that
+    neither init.defaultBranch nor git's own default does, so a clone that
+    took the name from either would show it.
+
+    """
+    return _make_empty_remote(tmp_path, "elsewhere")
+
+
+@pytest.mark.parametrize("bare", [False, True])
+@pytest.mark.parametrize("default_branch", [None, "trunk"])
+def test_worktree_clone_empty_repository(
+    empty_remote, tmp_path, monkeypatch, bare, default_branch
+):
+    _isolate_global_config(tmp_path, monkeypatch, default_branch)
+    branch = "elsewhere"
+
+    umbrella = tmp_path / "umbrella"
+    result = _run_git_project(
+        tmp_path,
+        "clone",
+        "--worktree",
+        *(["--bare"] if bare else []),
+        f"file://{empty_remote}",
+        str(umbrella),
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+    check_umbrella_gitdir(umbrella, ".empty.git")
+
+    main = pygit2.Repository(str(umbrella / branch))
+    assert main.head_is_unborn
+    assert main.references["HEAD"].target == f"refs/heads/{branch}"
+
+    config = pygit2.Repository(str(umbrella / ".empty.git")).config
+    assert config["project.branch"] == branch
+    assert config[f"project.worktree.{branch}.path"] == str(umbrella / branch)
+    assert config[f"project.worktree.{branch}.committish"] == branch
+    if not bare:
+        assert config[f"branch.{branch}.remote"] == "origin"
+        assert config[f"branch.{branch}.merge"] == f"refs/heads/{branch}"
+
+
+def test_worktree_clone_failure_leaves_nothing(remote_repository, tmp_path):
+    """A clone that fails after the bare clone removes the store and the
+    umbrella's .git file, and keeps what was there before.
+
+    """
+    umbrella = tmp_path / "umbrella"
+    (umbrella / "master").mkdir(parents=True)
+    (umbrella / "master" / "keep").write_text("keep\n")
+
+    result = _run_git_project(
+        tmp_path, "clone", "--worktree", remote_repository.path, str(umbrella)
+    )
+
+    assert result.returncode != 0
+    assert "already exists" in result.stdout
+    assert "Traceback" not in result.stderr
+    assert sorted(os.listdir(umbrella)) == ["master"]
+    assert (umbrella / "master" / "keep").read_text() == "keep\n"
+
+
+def test_worktree_clone_failure_removes_made_umbrella(
+    empty_remote, tmp_path, monkeypatch
+):
+    _isolate_global_config(tmp_path, monkeypatch)
+    _fail_git_worktree_add(tmp_path, monkeypatch)
+
+    result = _run_git_project(
+        tmp_path,
+        "clone",
+        "--worktree",
+        f"file://{empty_remote}",
+        str(tmp_path / "new" / "umbrella"),
+    )
+
+    assert result.returncode != 0
+    assert "Traceback" not in result.stderr
+    assert (
+        "on unborn branch elsewhere: error: unknown option `orphan' "
+        "(an unborn branch needs git 2.42 or later)\n"
+    ) in result.stdout
+    assert "usage" not in result.stdout
+    assert not (tmp_path / "new").exists()
+
+
+def test_worktree_clone_failure_keeps_cwd_umbrella(
+    empty_remote, tmp_path, monkeypatch
+):
+    _isolate_global_config(tmp_path, monkeypatch)
+    _fail_git_worktree_add(tmp_path, monkeypatch)
+    umbrella = tmp_path / "umbrella"
+    umbrella.mkdir()
+
+    result = _run_git_project(
+        umbrella, "clone", "--worktree", f"file://{empty_remote}"
+    )
+
+    assert result.returncode != 0
+    assert "Traceback" not in result.stderr
+    assert "(an unborn branch needs git 2.42 or later)" in result.stdout
+    assert umbrella.is_dir()
+    assert os.listdir(umbrella) == []
+
+
+def test_worktree_clone_failure_removes_slash_branch_worktree(
+    tmp_path, monkeypatch
+):
+    """With umbrella/feature already there, a failed add of the main
+    worktree at umbrella/feature/x removes x and keeps feature.
+
+    """
+    empty_remote = _make_empty_remote(tmp_path, "feature/x")
+    _isolate_global_config(tmp_path, monkeypatch)
+    _fail_git_worktree_add(tmp_path, monkeypatch)
+    umbrella = tmp_path / "umbrella"
+    (umbrella / "feature").mkdir(parents=True)
+
+    result = _run_git_project(
+        tmp_path,
+        "clone",
+        "--worktree",
+        f"file://{empty_remote}",
+        str(umbrella),
+    )
+
+    assert result.returncode != 0
+    assert "Traceback" not in result.stderr
+    assert "on unborn branch feature/x: " in result.stdout
+    assert sorted(os.listdir(umbrella)) == ["feature"]
+    assert os.listdir(umbrella / "feature") == []
+
+
+def test_worktree_clone_refuses_existing_umbrella_gitdir(
+    remote_repository, tmp_path
+):
+    umbrella = tmp_path / "umbrella"
+    umbrella.mkdir()
+    (umbrella / ".git").write_text("gitdir: elsewhere\n")
+
+    result = _run_git_project(
+        tmp_path, "clone", "--worktree", remote_repository.path, str(umbrella)
+    )
+
+    assert result.returncode != 0
+    assert "already has a .git" in result.stdout
+    assert "Traceback" not in result.stderr
+    assert sorted(os.listdir(umbrella)) == [".git"]
+    assert (umbrella / ".git").read_text() == "gitdir: elsewhere\n"
+
+
+def test_worktree_clone_dotdot_path_keeps_existing_repository(
+    remote_repository, tmp_path
+):
+    """A '..' past a directory the clone would create names an existing
+    repository, whose .git the clone must neither overwrite nor remove.
+
+    """
+    existing = tmp_path / "b"
+    pygit2.init_repository(str(existing))
+    (existing / "file").write_text("keep\n")
+    before = sorted(os.listdir(existing / ".git"))
+
+    result = _run_git_project(
+        tmp_path, "clone", "--worktree", remote_repository.path, "nope/../b"
+    )
+
+    assert result.returncode != 0
+    assert "Traceback" not in result.stderr
+    assert (existing / ".git").is_dir()
+    assert sorted(os.listdir(existing / ".git")) == before
+    assert (existing / "file").read_text() == "keep\n"
+    assert not (tmp_path / "nope").exists()
+
+
+def test_choose_main_branch_no_branches(tmp_path, monkeypatch):
+    pygit2.init_repository(str(tmp_path / "repo"))
+    monkeypatch.chdir(tmp_path / "repo")
+    asked = []
+
+    def fake_input(prompt):
+        # Fail rather than hang if the prompt loops.
+        asked.append(prompt)
+        if len(asked) > 3:
+            raise RuntimeError("prompt repeated")
+        return ""
+
+    monkeypatch.setattr("builtins.input", fake_input)
+
+    with pytest.raises(git_project.GitProjectError, match="no branches"):
+        WorktreePlugin()._choose_main_branch(git_project.Git())
+    assert asked == []
+
+
 def test_worktree_init(git, git_project_runner, tmp_path_factory):
     path = tmp_path_factory.mktemp("clone-workdir")
 
@@ -626,6 +887,29 @@ def test_worktree_init_nomain_multi(git, git_project_runner, tmp_path_factory):
     assert not os.path.exists(workarea / "other")
     assert not os.path.exists(workarea / "another")
     assert not os.path.exists(workarea / "yetanother")
+
+
+def test_worktree_init_prompt_without_input(git, tmp_path_factory):
+    path = tmp_path_factory.mktemp("clone-workdir")
+    os.chdir(path)
+    clone_path = git.clone("file://" + git.get_gitdir())
+    os.chdir(clone_path)
+    git = git_project.Git()
+    workarea = git.get_working_copy_root()
+
+    git.create_branch("newmain", "master")
+    git.checkout("newmain")
+    git.delete_branch("master")
+    git.create_branch("other", "newmain")
+
+    result = _run_git_project(workarea, "init", "--worktree")
+
+    assert result.returncode != 0
+    assert "no input to read one from" in result.stdout
+    assert "Traceback" not in result.stderr
+    # The prompt comes before init changes the layout.
+    assert (workarea / ".git").is_dir()
+    assert (workarea / "MergedRemote.txt").exists()
 
 
 def test_worktree_add(git, git_project_runner, tmp_path_factory):

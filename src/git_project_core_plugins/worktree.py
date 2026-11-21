@@ -22,6 +22,7 @@
 # with git-project. If not, see <https://www.gnu.org/licenses/>.
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -390,6 +391,79 @@ def _apply_worktree_add(git, project, plan, multirepo=None):
         raise
 
     return worktree
+
+
+def _unborn_head_refname(git):
+    """Return the refname HEAD names when the repository has no branches
+    and HEAD is unborn, as in a clone of an empty repository. Return None
+    otherwise.
+
+    """
+    if next(iter(git.iterrefnames(["refs/heads"])), None) is not None:
+        return None
+    repo = pygit2.Repository(git.get_git_common_dir())
+    if not repo.head_is_unborn:
+        return None
+    return repo.references["HEAD"].target
+
+
+def _add_orphan_worktree(git, project, path, branch):
+    """Add a worktree at path on branch, which has no commit yet, and record
+    it as worktree add does. Raise GitProjectError if git cannot add it.
+
+    """
+    path = Path(path).resolve()
+    # libgit2 cannot add a worktree on an unborn branch.
+    result = subprocess.run(
+        [
+            "git",
+            "--git-dir",
+            git.get_git_common_dir(),
+            "worktree",
+            "add",
+            "--quiet",
+            "--orphan",
+            "-b",
+            branch,
+            str(path),
+        ],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        first_line = next(iter(result.stderr.strip().splitlines()), "")
+        raise GitProjectError(
+            f"Cannot add worktree {path} on unborn branch {branch}: "
+            f"{first_line} (an unborn branch needs git 2.42 or later)"
+        )
+    return Worktree.get(
+        git, project, path.name, path=str(path), committish=branch
+    )
+
+
+def _undo_umbrella_clone(made, made_dirs):
+    """Remove what a failed clone --worktree made: the paths in made, then
+    the directories in made_dirs, newest first, if they are empty. Report,
+    rather than raise, what cannot be removed, so the caller's error is the
+    one the user sees.
+
+    """
+    for path in reversed(made):
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            elif os.path.lexists(path):
+                path.unlink()
+        except OSError as exception:
+            print(
+                f"warning: could not remove {path}: {exception}",
+                file=sys.stderr,
+            )
+    for directory in reversed(made_dirs):
+        with contextlib.suppress(OSError):
+            directory.rmdir()
 
 
 # worktree add
@@ -2571,12 +2645,21 @@ class WorktreePlugin(Plugin):
             return git.branch_name_to_refname(main)
 
         branches = list(git.iterrefnames(["refs/heads"]))
+        if not branches:
+            raise GitProjectError(
+                "Cannot choose a main branch, the repository has no branches"
+            )
         while True:
             for refname in branches:
                 print(git.refname_to_branch_name(refname))
-            main = input(
-                "No unique main branch found, enter branch to use as main: "
-            )
+            try:
+                main = input(
+                    "No unique main branch found, enter branch to use as main: "
+                )
+            except EOFError:
+                raise GitProjectError(
+                    "No unique main branch found and no input to read one from"
+                ) from None
             if git.branch_name_to_refname(main) in branches:
                 break
 
@@ -2593,6 +2676,14 @@ class WorktreePlugin(Plugin):
             "origin", ["+refs/heads/*:refs/remotes/origin/*"]
         )
         p_git.fetch_remote("origin")
+
+        unborn = _unborn_head_refname(p_git)
+        if unborn:
+            # There is no branch yet to set an upstream on.
+            section = f"branch.{p_git.refname_to_branch_name(unborn)}"
+            p_git.config.set_item(section, "remote", "origin")
+            p_git.config.set_item(section, "merge", unborn)
+            return unborn
 
         main = self._choose_main_branch(p_git)
 
@@ -2638,41 +2729,94 @@ class WorktreePlugin(Plugin):
 
                     assert hasattr(clargs, "url")
 
-                    path = path / get_hidden_gitdir_name(clargs.url)
+                    # Resolved before anything is recorded, so a '..' past a
+                    # directory the clone creates cannot name an existing one
+                    # that the undo would then remove.
+                    path = (
+                        path / get_hidden_gitdir_name(clargs.url)
+                    ).resolve()
+                    umbrella = path.parent
+
+                    # Writing the pointer would overwrite it, and an undo
+                    # could not bring it back.
+                    if os.path.lexists(umbrella / ".git"):
+                        raise GitProjectError(
+                            f"Cannot clone into {umbrella}, it already has a .git"
+                        )
 
                     bare_specified = clargs.bare
 
                     clargs.path = str(path)
                     clargs.bare = True
 
-                    # Bare clone to the hidden directory.
-                    path = command_clone(
-                        p_git, p_gitproject, p_project, clargs
-                    )
+                    # What this clone makes, to remove if a later step fails.
+                    made_dirs = []
+                    directory = umbrella
+                    while not os.path.lexists(directory):
+                        made_dirs.insert(0, directory)
+                        directory = directory.parent
+                    made = [
+                        made_path
+                        for made_path in (path, umbrella / ".git")
+                        if not os.path.lexists(made_path)
+                    ]
 
-                    # If the user did not ask for a bare repo, rewrite refspecs,
-                    # fetch remote refs and rewrite existing refs (just main)
-                    # to track the remote ref. Delete other "local" branches.
-                    main = ""
-                    if not bare_specified:
-                        main = self._rewrite_bare_refspects(p_git)
+                    try:
+                        # Bare clone to the hidden directory.
+                        path = command_clone(
+                            p_git, p_gitproject, p_project, clargs
+                        )
 
-                    if not main:
-                        main = self._choose_main_branch(p_git)
+                        # If the user did not ask for a bare repo, rewrite
+                        # refspecs, fetch remote refs and rewrite existing
+                        # refs (just main) to track the remote ref. Delete
+                        # other "local" branches.
+                        main = ""
+                        if not bare_specified:
+                            main = self._rewrite_bare_refspects(p_git)
 
-                    write_umbrella_gitdir(Path(path).parent, Path(path).name)
+                        unborn = _unborn_head_refname(p_git)
+                        if not main:
+                            main = unborn or self._choose_main_branch(p_git)
 
-                    # Detach HEAD so we can worktree main.
-                    p_git.detach_head()
+                        main_branch = p_git.refname_to_branch_name(main)
+                        main_top = None
+                        directory = umbrella / main_branch
+                        while directory != umbrella and not os.path.lexists(
+                            directory
+                        ):
+                            main_top = directory
+                            directory = directory.parent
+                        if main_top is not None:
+                            made.append(main_top)
 
-                    self._setup_main_worktree(
-                        main,
-                        p_git,
-                        p_gitproject,
-                        p_project,
-                        Path(path).parent,
-                        clargs,
-                    )
+                        write_umbrella_gitdir(umbrella, Path(path).name)
+
+                        if unborn:
+                            if not p_project.has_item("branch"):
+                                p_project.branch = main_branch
+                            _add_orphan_worktree(
+                                p_git,
+                                p_project,
+                                umbrella / main_branch,
+                                main_branch,
+                            )
+                        else:
+                            # Detach HEAD so we can worktree main.
+                            p_git.detach_head()
+
+                            self._setup_main_worktree(
+                                main,
+                                p_git,
+                                p_gitproject,
+                                p_project,
+                                umbrella,
+                                clargs,
+                            )
+                    # A Ctrl-C raises KeyboardInterrupt, so undo on that too.
+                    except BaseException:
+                        _undo_umbrella_clone(made, made_dirs)
+                        raise
                 else:
                     path = command_clone(
                         p_git, p_gitproject, p_project, clargs
